@@ -1,0 +1,32 @@
+# Compiled binaries
+*.o
+*.out
+*.exe
+Embedded/temp_sensor
+Embedded/hvac_controller
+Embedded/power_meter
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+Gateway/__pycache__/
+
+# Build artifacts
+*.a
+*.so
+
+# Logs
+*.log
