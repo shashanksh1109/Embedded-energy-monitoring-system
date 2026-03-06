@@ -2,8 +2,9 @@
 """
 main.py - Gateway Application Entry Point
 
-This is the ONLY file you run: python3 main.py
-All logic is delegated to gateway_server.py
+Usage:
+  python3 main.py              (simulation mode)
+  python3 main.py --hardware   (hardware mode - ESP32)
 """
 
 import sys
@@ -14,8 +15,18 @@ def main():
     print("  ENERGY MONITORING GATEWAY")
     print("="*50 + "\n")
     
+    # Check for --hardware flag
+    use_hardware = '--hardware' in sys.argv
+    
+    if use_hardware:
+        print("[MAIN] Hardware mode enabled")
+        print("[MAIN] Spawned processes will use real sensors\n")
+    else:
+        print("[MAIN] Simulation mode (default)")
+        print("[MAIN] Use --hardware flag for real sensors\n")
+    
     try:
-        exit_code = run_gateway()
+        exit_code = run_gateway(use_hardware=use_hardware)
         print(f"\n[MAIN] Gateway exiting with code: {exit_code}\n")
         return exit_code
     except KeyboardInterrupt:

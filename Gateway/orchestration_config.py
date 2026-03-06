@@ -7,19 +7,22 @@ Defines thresholds and rules for automatic process spawning
 class OrchestrationConfig:
     """Configuration for autonomous process management"""
     
-    def __init__(self):
+    def __init__(self, use_hardware=False):
         # Temperature thresholds
-        self.temp_threshold_low = 18.0      # Below this: start heating
-        self.temp_threshold_high = 24.0     # Above this: start cooling
-        self.temp_target = 20.0             # Target temperature for HVAC
+        self.temp_threshold_low = 18.0
+        self.temp_threshold_high = 24.0
+        self.temp_target = 20.0
         
         # Timing parameters
-        self.stable_duration = 30           # Seconds temp must be stable before stopping HVAC
-        self.hvac_startup_delay = 5         # Seconds to wait before starting HVAC
+        self.stable_duration = 30
+        self.hvac_startup_delay = 5
         
         # Process management
-        self.max_restart_attempts = 3       # Max times to restart failed process
-        self.health_check_interval = 10     # Seconds between health checks
+        self.max_restart_attempts = 3
+        self.health_check_interval = 10
+        
+        # Hardware mode
+        self.use_hardware = use_hardware  # NEW!
         
         # Paths to executables
         self.hvac_executable = './Embedded/hvac_controller'
@@ -40,8 +43,9 @@ class OrchestrationConfig:
     def display(self):
         """Display orchestration configuration"""
         print("[ORCHESTRATION] Temperature Thresholds:")
-        print(f"[ORCHESTRATION]   Low:    {self.temp_threshold_low}°C (start heating)")
-        print(f"[ORCHESTRATION]   High:   {self.temp_threshold_high}°C (start cooling)")
-        print(f"[ORCHESTRATION]   Target: {self.temp_target}°C")
+        print(f"[ORCHESTRATION]   Low:    {self.temp_threshold_low}C (start heating)")
+        print(f"[ORCHESTRATION]   High:   {self.temp_threshold_high}C (start cooling)")
+        print(f"[ORCHESTRATION]   Target: {self.temp_target}C")
         print(f"[ORCHESTRATION] Stable duration: {self.stable_duration}s")
+        print(f"[ORCHESTRATION] Hardware mode: {'ENABLED' if self.use_hardware else 'DISABLED'}")
         print()
