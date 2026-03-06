@@ -15,6 +15,7 @@ typedef struct {
     char zone[16];
     float base_temp;
     int sampling_rate;
+    int use_hardware;      // NEW: 0=simulation, 1=real hardware
 } SensorConfig;
 
 // Configuration functions

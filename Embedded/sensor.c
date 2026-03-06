@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <math.h>
 #include "sensor.h"
+#include "sensor_hardware.h"  // NEW: Include hardware interface
 #include "protocol.h"
 
 #define PI 3.14159265
@@ -32,12 +33,47 @@ void execute_sensor_loop(SensorConfig *config, NetworkConnection *conn) {
     int packet_count = 0;
     
     printf("[SENSOR] Starting measurement loop...\n");
+    
+    // Display mode
+    if (config->use_hardware) {
+        printf("         Mode: REAL HARDWARE (ESP32/DHT22)\n");
+    } else {
+        printf("         Mode: SOFTWARE SIMULATION\n");
+    }
+    
     printf("         Press Ctrl+C to stop\n");
     printf("─────────────────────────────────────────────\n");
     
+    // Initialize hardware if needed (COMMENTED - uncomment when ESP32 ready)
+    // if (config->use_hardware) {
+    //     if (initialize_hardware_sensor() < 0) {
+    //         printf("[SENSOR] ✗ Hardware initialization failed\n");
+    //         return;
+    //     }
+    // }
+    
     while (1) {
-        // Generate reading
-        float temperature = generate_temperature_reading(config->base_temp, time_elapsed);
+        float temperature;
+        
+        // Choose sensor source based on configuration
+        if (config->use_hardware) {
+            // HARDWARE MODE (function call commented until ESP32 ready)
+            // temperature = read_hardware_temperature();
+            
+            // PLACEHOLDER: Simulate hardware for now
+            temperature = read_hardware_temperature();  // This compiles and runs!
+            
+        } else {
+            // SIMULATION MODE (active)
+            temperature = generate_temperature_reading(config->base_temp, time_elapsed);
+        }
+        
+        // Check for sensor error
+        if (temperature < -100) {
+            printf("[SENSOR] ✗ Sensor read error, skipping this reading\n");
+            sleep(config->sampling_rate);
+            continue;
+        }
         
         // Transmit
         if (transmit_reading(conn, config, temperature) < 0) {
@@ -47,8 +83,13 @@ void execute_sensor_loop(SensorConfig *config, NetworkConnection *conn) {
         
         // Log
         packet_count++;
-        printf("[SENSOR] #%-4d | %.2f°C | %s | +%ds\n", 
-               packet_count, temperature, config->zone, time_elapsed);
+        if (config->use_hardware) {
+            printf("[SENSOR] #%-4d | %.2f°C | %s | [HARDWARE]\n", 
+                   packet_count, temperature, config->zone);
+        } else {
+            printf("[SENSOR] #%-4d | %.2f°C | %s | +%ds [SIM]\n", 
+                   packet_count, temperature, config->zone, time_elapsed);
+        }
         
         // Wait
         sleep(config->sampling_rate);

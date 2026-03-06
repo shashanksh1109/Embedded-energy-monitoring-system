@@ -39,6 +39,16 @@ int run_sensor(int argc, char *argv[]) {
     // STEP 3: Sensor Operation
     // ========================================
     printf("─── Step 3: Sensor Operation ───\n");
+    
+    // Display which mode we're using
+    if (config.use_hardware) {
+        printf("[ORCHESTRATOR] Hardware mode selected\n");
+        printf("[ORCHESTRATOR] NOTE: Hardware functions are implemented but use placeholders\n");
+        printf("[ORCHESTRATOR]       Upload to ESP32 for real sensor readings\n\n");
+    } else {
+        printf("[ORCHESTRATOR] Simulation mode active\n\n");
+    }
+    
     execute_sensor_loop(&config, &conn);
     printf("\n");
     

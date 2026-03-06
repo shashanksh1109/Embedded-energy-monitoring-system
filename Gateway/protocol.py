@@ -10,7 +10,7 @@ Handles:
 import struct
 
 # Packet format: 8s (device_id) I (timestamp) f (value) B (type) B (checksum) 2x (padding)
-PACKET_FORMAT = '8sIfBB2x'
+PACKET_FORMAT = '<8sIfBB2x'
 PACKET_SIZE = 20
 
 # Packet type definitions
