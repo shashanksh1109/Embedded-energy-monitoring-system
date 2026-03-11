@@ -1,0 +1,76 @@
+version: '3.3'
+
+services:
+
+  gateway:
+    build:
+      context: ./Gateway
+      dockerfile: Dockerfile
+    container_name: energy-gateway
+    ports:
+      - "8080:8080"
+    networks:
+      - energy-network
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  sensor:
+    build:
+      context: ./Embedded
+      dockerfile: Dockerfile
+    container_name: energy-sensor
+    command: ["./temp_sensor", "TEMP_A", "Zone_A", "22.0", "5"]
+    depends_on:
+      - gateway
+    networks:
+      - energy-network
+    restart: unless-stopped
+    environment:
+      - GATEWAY_HOST=gateway
+
+  hvac:
+    build:
+      context: ./Embedded
+      dockerfile: Dockerfile
+    container_name: energy-hvac
+    command: ["./hvac_controller", "HVAC_A", "Zone_A", "20.0"]
+    depends_on:
+      - gateway
+    networks:
+      - energy-network
+    restart: unless-stopped
+    environment:
+      - GATEWAY_HOST=gateway
+
+  power:
+    build:
+      context: ./Embedded
+      dockerfile: Dockerfile
+    container_name: energy-power
+    command: ["./power_meter", "POWER_A", "Zone_A"]
+    depends_on:
+      - gateway
+    networks:
+      - energy-network
+    restart: unless-stopped
+    environment:
+      - GATEWAY_HOST=gateway
+
+  occupancy:
+    build:
+      context: ./Embedded
+      dockerfile: Dockerfile
+    container_name: energy-occupancy
+    command: ["./occupancy_sensor", "OCC_A", "Zone_A", "5"]
+    depends_on:
+      - gateway
+    networks:
+      - energy-network
+    restart: unless-stopped
+    environment:
+      - GATEWAY_HOST=gateway
+
+networks:
+  energy-network:
+    driver: bridge

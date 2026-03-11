@@ -9,9 +9,15 @@
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include "power_hardware.h"
 
 #define ELECTRICITY_COST_PER_KWH 0.12  // $0.12 per kWh
+#define GATEWAY_PORT 8080
+#define DEFAULT_GATEWAY_HOST "127.0.0.1"
 
 typedef struct {
     char device_id[16];
@@ -25,6 +31,16 @@ typedef struct {
 PowerMeterConfig parse_power_config(int argc, char *argv[]);
 void run_power_meter_loop(PowerMeterConfig *config);
 float calculate_hvac_power(float base_load, float hvac_percentage);
+
+// NEW: reads GATEWAY_HOST env var, falls back to 127.0.0.1 (same pattern as network.c)
+static const char* get_gateway_host(void) {
+    const char *env_host = getenv("GATEWAY_HOST");
+    if (env_host) {
+        printf("[POWER] Using gateway from environment: %s\n", env_host);
+        return env_host;
+    }
+    return DEFAULT_GATEWAY_HOST;
+}
 
 int main(int argc, char *argv[]) {
     printf("\n╔════════════════════════════════════════╗\n");
@@ -83,6 +99,7 @@ void run_power_meter_loop(PowerMeterConfig *config) {
     
     printf("[POWER] Starting power monitoring...\n");
     printf("[POWER] Electricity rate: $%.2f per kWh\n", ELECTRICITY_COST_PER_KWH);
+    printf("[POWER] Gateway: %s:%d\n", get_gateway_host(), GATEWAY_PORT);
     printf("[POWER] Press Ctrl+C to stop\n");
     printf("═══════════════════════════════════════════════════════════════════════\n");
     

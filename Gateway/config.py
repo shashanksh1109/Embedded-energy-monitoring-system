@@ -10,7 +10,7 @@ Handles all configuration-related operations:
 class GatewayConfig:
     """Gateway configuration settings"""
     
-    def __init__(self, host='127.0.0.1', port=8080):
+    def __init__(self, host='0.0.0.0', port=8080):
         self.host = host
         self.port = port
         self.buffer_size = 1000
@@ -32,7 +32,7 @@ class GatewayConfig:
         print("[CONFIG] Gateway Port:        ", self.port)
         print("[CONFIG] Buffer Size:         ", self.buffer_size)
         print("[CONFIG] Analytics Interval:  ", self.analytics_interval, "seconds")
-        print("[CONFIG] ✓ Configuration loaded\n")
+        print("[CONFIG] Configuration loaded\n")
 
 
 def load_configuration():

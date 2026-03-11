@@ -8,8 +8,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include "pid.h"
 #include "hvac_hardware.h"
+
+#define GATEWAY_PORT 8080
+#define DEFAULT_GATEWAY_HOST "127.0.0.1"
 
 typedef struct {
     char device_id[16];
@@ -22,6 +29,16 @@ typedef struct {
 HVACConfig parse_hvac_config(int argc, char *argv[]);
 void run_hvac_loop(HVACConfig *config);
 float simulate_temperature_physics(float current_temp, float heater_power, float cooler_power, float dt);
+
+// NEW: reads GATEWAY_HOST env var, falls back to 127.0.0.1 (same pattern as network.c)
+static const char* get_gateway_host(void) {
+    const char *env_host = getenv("GATEWAY_HOST");
+    if (env_host) {
+        printf("[HVAC] Using gateway from environment: %s\n", env_host);
+        return env_host;
+    }
+    return DEFAULT_GATEWAY_HOST;
+}
 
 int main(int argc, char *argv[]) {
     printf("\n╔════════════════════════════════════════╗\n");
@@ -83,6 +100,7 @@ void run_hvac_loop(HVACConfig *config) {
     printf("[HVAC] Starting control loop...\n");
     printf("[HVAC] Setpoint: %.1f°C\n", config->setpoint);
     printf("[HVAC] PID Gains: Kp=%.1f, Ki=%.1f, Kd=%.1f\n", pid.kp, pid.ki, pid.kd);
+    printf("[HVAC] Gateway: %s:%d\n", get_gateway_host(), GATEWAY_PORT);
     printf("[HVAC] Press Ctrl+C to stop\n");
     printf("═══════════════════════════════════════════════════════════════\n");
     
