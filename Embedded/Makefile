@@ -6,11 +6,11 @@ SENSOR_SOURCES = main.c sensor_logic.c config.c network.c sensor.c sensor_hardwa
 SENSOR_OBJECTS = $(SENSOR_SOURCES:.c=.o)
 
 HVAC_TARGET  = hvac_controller
-HVAC_SOURCES = hvac_controller.c pid.c hvac_hardware.c
+HVAC_SOURCES = hvac_controller.c pid.c hvac_hardware.c protocol.c
 HVAC_OBJECTS = $(HVAC_SOURCES:.c=.o)
 
 POWER_TARGET  = power_meter
-POWER_SOURCES = power_meter.c power_hardware.c
+POWER_SOURCES = power_meter.c power_hardware.c protocol.c
 POWER_OBJECTS = $(POWER_SOURCES:.c=.o)
 
 OCCUPANCY_TARGET  = occupancy_sensor

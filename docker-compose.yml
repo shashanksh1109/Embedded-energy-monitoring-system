@@ -11,19 +11,21 @@ services:
       POSTGRES_USER:     energy_user
       POSTGRES_PASSWORD: energy_pass
     volumes:
-      - postgres_data:/var/lib/postgresql/data      # persist data across restarts
-      - ./Database/schema.sql:/docker-entrypoint-initdb.d/schema.sql  # auto-run on first start
+      - postgres_data:/var/lib/postgresql/data
+      - ./Database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     ports:
-      - "5432:5432"     # expose for local debugging (e.g. pgAdmin, DBeaver)
+      - "5432:5432"
     networks:
       - energy-network
     restart: unless-stopped
 
   # ─── Python Gateway ───────────────────────────────────────────────────────────
+  # Build context is project root so Dockerfile can reach both
+  # Gateway/*.py and Embedded/*.c in one build
   gateway:
     build:
-      context: ./Gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Gateway/Dockerfile
     container_name: energy-gateway
     ports:
       - "8080:8080"
@@ -39,44 +41,16 @@ services:
       - DB_NAME=energy_db
       - DB_USER=energy_user
       - DB_PASSWORD=energy_pass
+      - GATEWAY_HOST=gateway
 
   # ─── Temperature Sensor (C) ───────────────────────────────────────────────────
+  # base_temp=15.0 → below 18°C threshold → gateway will spawn HVAC automatically
   sensor:
     build:
       context: ./Embedded
       dockerfile: Dockerfile
     container_name: energy-sensor
-    command: ["./temp_sensor", "TEMP_A", "Zone_A", "22.0", "5"]
-    depends_on:
-      - gateway
-    networks:
-      - energy-network
-    restart: unless-stopped
-    environment:
-      - GATEWAY_HOST=gateway
-
-  # ─── HVAC Controller (C) ──────────────────────────────────────────────────────
-  hvac:
-    build:
-      context: ./Embedded
-      dockerfile: Dockerfile
-    container_name: energy-hvac
-    command: ["./hvac_controller", "HVAC_A", "Zone_A", "20.0"]
-    depends_on:
-      - gateway
-    networks:
-      - energy-network
-    restart: unless-stopped
-    environment:
-      - GATEWAY_HOST=gateway
-
-  # ─── Power Meter (C) ──────────────────────────────────────────────────────────
-  power:
-    build:
-      context: ./Embedded
-      dockerfile: Dockerfile
-    container_name: energy-power
-    command: ["./power_meter", "POWER_A", "Zone_A"]
+    command: ["./temp_sensor", "TEMP_A", "Zone_A", "15.0", "5"]
     depends_on:
       - gateway
     networks:
@@ -100,9 +74,13 @@ services:
     environment:
       - GATEWAY_HOST=gateway
 
+  # NOTE: hvac and power services removed.
+  # Gateway spawns hvac_controller and power_meter as child processes
+  # automatically when temperature goes out of range.
+
 networks:
   energy-network:
     driver: bridge
 
 volumes:
-  postgres_data:    # named volume so data survives container restarts
+  postgres_data:
