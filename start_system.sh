@@ -25,8 +25,18 @@ echo "[STARTUP] Build successful"
 echo ""
 cd ..
 
+# Start PostgreSQL
+echo "[STARTUP] Step 2: Starting PostgreSQL..."
+sudo service postgresql start
+if [ $? -ne 0 ]; then
+    echo "[STARTUP] WARNING: PostgreSQL failed to start, gateway will run without persistence"
+else
+    echo "[STARTUP] PostgreSQL started"
+fi
+echo ""
+
 # Start Gateway
-echo "[STARTUP] Step 2: Starting Gateway..."
+echo "[STARTUP] Step 3: Starting Gateway..."
 cd Gateway
 python3 main.py $HARDWARE_FLAG &
 GATEWAY_PID=$!
@@ -37,12 +47,18 @@ echo "[STARTUP] Waiting for initialization..."
 sleep 3
 echo ""
 
-# Start Sensor
-echo "[STARTUP] Step 3: Starting temperature sensor..."
+# Start Temperature Sensor
+echo "[STARTUP] Step 4: Starting temperature sensor..."
 ./Embedded/temp_sensor TEMP_A Zone_A 22.0 5 $HARDWARE_FLAG &
 SENSOR_PID=$!
-
 echo "[STARTUP] Sensor started (PID: $SENSOR_PID)"
+echo ""
+
+# Start Occupancy Sensor
+echo "[STARTUP] Step 5: Starting occupancy sensor..."
+./Embedded/occupancy_sensor OCC_A Zone_A 5 $HARDWARE_FLAG &
+OCCUPANCY_PID=$!
+echo "[STARTUP] Occupancy sensor started (PID: $OCCUPANCY_PID)"
 echo ""
 
 # Display status
@@ -51,8 +67,10 @@ echo "  SYSTEM ACTIVE"
 echo "================================================================"
 echo ""
 echo "  Mode: $(if [ -n "$HARDWARE_FLAG" ]; then echo "HARDWARE (ESP32)"; else echo "SIMULATION"; fi)"
-echo "  Gateway: PID $GATEWAY_PID"
-echo "  Sensor:  PID $SENSOR_PID"
+echo "  Database:         PostgreSQL (energy_db)"
+echo "  Gateway:          PID $GATEWAY_PID"
+echo "  Temp Sensor:      PID $SENSOR_PID"
+echo "  Occupancy Sensor: PID $OCCUPANCY_PID"
 echo ""
 echo "  Auto-spawn enabled:"
 echo "    Temperature < 18C: Start HVAC (heating)"
@@ -72,18 +90,23 @@ cleanup() {
     echo "================================================================"
     echo ""
     echo "[STARTUP] Terminating processes..."
-    
+
+    if kill -0 $OCCUPANCY_PID 2>/dev/null; then
+        kill $OCCUPANCY_PID
+        echo "[STARTUP] Occupancy sensor stopped"
+    fi
+
     if kill -0 $SENSOR_PID 2>/dev/null; then
         kill $SENSOR_PID
         echo "[STARTUP] Sensor stopped"
     fi
-    
+
     if kill -0 $GATEWAY_PID 2>/dev/null; then
         kill $GATEWAY_PID
         wait $GATEWAY_PID 2>/dev/null
         echo "[STARTUP] Gateway stopped"
     fi
-    
+
     echo ""
     echo "[STARTUP] Shutdown complete"
     echo ""

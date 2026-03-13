@@ -2,6 +2,24 @@ version: '3.3'
 
 services:
 
+  # ─── PostgreSQL Database ──────────────────────────────────────────────────────
+  db:
+    image: postgres:15
+    container_name: energy-db
+    environment:
+      POSTGRES_DB:       energy_db
+      POSTGRES_USER:     energy_user
+      POSTGRES_PASSWORD: energy_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data      # persist data across restarts
+      - ./Database/schema.sql:/docker-entrypoint-initdb.d/schema.sql  # auto-run on first start
+    ports:
+      - "5432:5432"     # expose for local debugging (e.g. pgAdmin, DBeaver)
+    networks:
+      - energy-network
+    restart: unless-stopped
+
+  # ─── Python Gateway ───────────────────────────────────────────────────────────
   gateway:
     build:
       context: ./Gateway
@@ -9,12 +27,20 @@ services:
     container_name: energy-gateway
     ports:
       - "8080:8080"
+    depends_on:
+      - db
     networks:
       - energy-network
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=energy_db
+      - DB_USER=energy_user
+      - DB_PASSWORD=energy_pass
 
+  # ─── Temperature Sensor (C) ───────────────────────────────────────────────────
   sensor:
     build:
       context: ./Embedded
@@ -29,6 +55,7 @@ services:
     environment:
       - GATEWAY_HOST=gateway
 
+  # ─── HVAC Controller (C) ──────────────────────────────────────────────────────
   hvac:
     build:
       context: ./Embedded
@@ -43,6 +70,7 @@ services:
     environment:
       - GATEWAY_HOST=gateway
 
+  # ─── Power Meter (C) ──────────────────────────────────────────────────────────
   power:
     build:
       context: ./Embedded
@@ -57,6 +85,7 @@ services:
     environment:
       - GATEWAY_HOST=gateway
 
+  # ─── Occupancy Sensor (C) ─────────────────────────────────────────────────────
   occupancy:
     build:
       context: ./Embedded
@@ -74,3 +103,6 @@ services:
 networks:
   energy-network:
     driver: bridge
+
+volumes:
+  postgres_data:    # named volume so data survives container restarts
