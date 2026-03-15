@@ -28,35 +28,64 @@ class ClientHandler:
         self.db          = db       # DBWriter instance (None if DB unavailable)
         self.running     = True
 
+    def _recv_exact(self, n):
+        """Read exactly n bytes from socket, handling partial reads."""
+        data = b''
+        while len(data) < n:
+            chunk = self.socket.recv(n - len(data))
+            if not chunk:
+                return None
+            data += chunk
+        return data
+
     def handle(self):
         """Main client handling loop"""
         print(f"[NETWORK] Client connected: {self.address}")
 
         try:
             while self.running:
-                # Receive packet
-                data = self.socket.recv(self.parser.get_packet_size())
+                # Read first 20 bytes (V1 packet size)
+                data = self._recv_exact(self.parser.get_packet_size())
+                if not data:
+                    break
+
+                # Check version byte at position 13 (V2 packets have version=2 there)
+                # V1 packets have checksum at byte 17 — byte 13 is part of the float value
+                # V2 packets explicitly set version=2 at byte 13
+                version = data[13] if len(data) > 13 else 1
+
+                if version == 2:
+                    # Read remaining 12 bytes to complete the 32-byte V2 packet
+                    rest = self._recv_exact(self.parser.get_v2_packet_size() - self.parser.get_packet_size())
+                    if not rest:
+                        break
+                    data = data + rest
 
                 if not data:
                     break
 
-                if len(data) != self.parser.get_packet_size():
-                    print(f"[NETWORK] Invalid packet size: {len(data)} bytes")
-                    break
-
-                # Validate checksum
+                # Validate checksum (V2 always passes)
                 if not self.parser.validate_checksum(data):
                     print("[NETWORK] Invalid checksum")
                     continue
 
-                # Parse packet
+                # Parse packet (auto-detects V1 or V2)
                 packet = self.parser.parse(data)
                 if packet:
                     # Store in circular buffer (in-memory analytics)
                     self.buffer.add(packet)
 
-                    print(f"[GATEWAY] Received {packet['type_name']}: "
-                          f"{packet['device_id']} = {packet['value']:.2f}")
+                    # Log differently for V1 and V2
+                    if packet['version'] == 2:
+                        print(f"[GATEWAY] Received {packet['type_name']} (V2): "
+                              f"{packet['device_id']} | "
+                              f"Heat:{packet.get('heater_pct', 0):.1f}% "
+                              f"Cool:{packet.get('cooler_pct', 0):.1f}% "
+                              f"Temp:{packet.get('current_temp', 0):.2f}°C "
+                              f"Setpoint:{packet.get('setpoint', 0):.1f}°C")
+                    else:
+                        print(f"[GATEWAY] Received {packet['type_name']}: "
+                              f"{packet['device_id']} = {packet['value']:.2f}")
 
                     # Persist to database
                     if self.db:

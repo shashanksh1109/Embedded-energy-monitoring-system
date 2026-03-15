@@ -248,15 +248,14 @@ class DBWriter:
     def _write_hvac_state(self, device_id, zone_id, packet, recorded_at):
         """
         Insert HVAC state into hvac_state.
-        HVAC packets carry PID output % in the value field.
-        setpoint and current_temp not available in current
-        packet format — stored as 0.0 until protocol is extended.
+        V2 packets carry full state: heater_pct, cooler_pct, current_temp, setpoint.
         """
-        pid_output  = packet['value']
-        heater_pct  = pid_output if pid_output > 0 else 0.0
-        cooler_pct  = 0.0
-        setpoint_c  = 0.0   # placeholder until HVAC_STATE packet extended
-        current_temp = 0.0  # placeholder until HVAC_STATE packet extended
+        # Use proper V2 fields if available, fallback for legacy
+        heater_pct   = packet.get('heater_pct',   packet.get('value1', 0.0))
+        cooler_pct   = packet.get('cooler_pct',   packet.get('value2', 0.0))
+        current_temp = packet.get('current_temp', packet.get('value3', 0.0))
+        setpoint_c   = packet.get('setpoint',     packet.get('value4', 0.0))
+        pid_output   = heater_pct if heater_pct > 0 else -cooler_pct
 
         self.cursor.execute(
             """
@@ -268,7 +267,9 @@ class DBWriter:
             (device_id, zone_id, setpoint_c, heater_pct, cooler_pct,
              pid_output, current_temp, recorded_at)
         )
-        print(f"[DB] Wrote HVAC_STATE: {device_id} pid={pid_output:.1f}%")
+        print(f"[DB] Wrote HVAC_STATE: {device_id} | "
+              f"Heat:{heater_pct:.1f}% Cool:{cooler_pct:.1f}% "
+              f"Temp:{current_temp:.2f}°C Setpoint:{setpoint_c:.1f}°C")
 
     # ============================================================
     # ANALYTICS + EVENTS

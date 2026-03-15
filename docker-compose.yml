@@ -20,12 +20,10 @@ services:
     restart: unless-stopped
 
   # ─── Python Gateway ───────────────────────────────────────────────────────────
-  # Build context is project root so Dockerfile can reach both
-  # Gateway/*.py and Embedded/*.c in one build
   gateway:
     build:
-      context: .
-      dockerfile: Gateway/Dockerfile
+      context: ./Gateway
+      dockerfile: Dockerfile
     container_name: energy-gateway
     ports:
       - "8080:8080"
@@ -41,16 +39,44 @@ services:
       - DB_NAME=energy_db
       - DB_USER=energy_user
       - DB_PASSWORD=energy_pass
-      - GATEWAY_HOST=gateway
 
   # ─── Temperature Sensor (C) ───────────────────────────────────────────────────
-  # base_temp=15.0 → below 18°C threshold → gateway will spawn HVAC automatically
   sensor:
     build:
       context: ./Embedded
       dockerfile: Dockerfile
     container_name: energy-sensor
-    command: ["./temp_sensor", "TEMP_A", "Zone_A", "15.0", "5"]
+    command: ["./temp_sensor", "TEMP_A", "Zone_A", "22.0", "5"]
+    depends_on:
+      - gateway
+    networks:
+      - energy-network
+    restart: unless-stopped
+    environment:
+      - GATEWAY_HOST=gateway
+
+  # ─── HVAC Controller (C) ──────────────────────────────────────────────────────
+  hvac:
+    build:
+      context: ./Embedded
+      dockerfile: Dockerfile
+    container_name: energy-hvac
+    command: ["./hvac_controller", "HVAC_A", "Zone_A", "20.0"]
+    depends_on:
+      - gateway
+    networks:
+      - energy-network
+    restart: unless-stopped
+    environment:
+      - GATEWAY_HOST=gateway
+
+  # ─── Power Meter (C) ──────────────────────────────────────────────────────────
+  power:
+    build:
+      context: ./Embedded
+      dockerfile: Dockerfile
+    container_name: energy-power
+    command: ["./power_meter", "POWER_A", "Zone_A"]
     depends_on:
       - gateway
     networks:
@@ -73,10 +99,6 @@ services:
     restart: unless-stopped
     environment:
       - GATEWAY_HOST=gateway
-
-  # NOTE: hvac and power services removed.
-  # Gateway spawns hvac_controller and power_meter as child processes
-  # automatically when temperature goes out of range.
 
 networks:
   energy-network:

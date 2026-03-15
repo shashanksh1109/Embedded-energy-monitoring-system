@@ -2,11 +2,15 @@
 orchestration_config.py - Orchestration Configuration
 
 Defines thresholds and rules for automatic process spawning.
-In Docker, hvac_controller and power_meter are copied into the
-gateway image at /app/ so the gateway can exec them directly.
+Executable paths are resolved relative to this file's location
+so the gateway works regardless of which directory it is launched from.
 """
 
 import os
+
+# Resolve the project root directory (one level up from Gateway/)
+_HERE         = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_HERE)
 
 
 class OrchestrationConfig:
@@ -19,21 +23,19 @@ class OrchestrationConfig:
         self.temp_target         = 20.0
 
         # Timing parameters
-        self.stable_duration     = 30
-        self.hvac_startup_delay  = 5
+        self.stable_duration    = 30
+        self.hvac_startup_delay = 5
 
         # Process management
-        self.max_restart_attempts   = 3
-        self.health_check_interval  = 10
+        self.max_restart_attempts  = 3
+        self.health_check_interval = 10
 
         # Hardware mode
         self.use_hardware = use_hardware
 
-        # Executable paths — /app/ is the WORKDIR inside the gateway container.
-        # hvac_controller and power_meter are copied there during Docker build.
-        # Falls back to local relative paths for running outside Docker.
-        self.hvac_executable  = os.environ.get('HVAC_EXECUTABLE',  '/app/hvac_controller')
-        self.power_executable = os.environ.get('POWER_EXECUTABLE', '/app/power_meter')
+        # Paths resolved from project root
+        self.hvac_executable  = os.path.join(_PROJECT_ROOT, 'Embedded', 'hvac_controller')
+        self.power_executable = os.path.join(_PROJECT_ROOT, 'Embedded', 'power_meter')
 
     def is_temperature_too_low(self, temp):
         """Check if temperature requires heating"""
