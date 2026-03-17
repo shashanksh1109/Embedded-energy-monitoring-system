@@ -6,11 +6,11 @@ SENSOR_SOURCES = main.c sensor_logic.c config.c network.c sensor.c sensor_hardwa
 SENSOR_OBJECTS = $(SENSOR_SOURCES:.c=.o)
 
 HVAC_TARGET  = hvac_controller
-HVAC_SOURCES = hvac_controller.c pid.c hvac_hardware.c protocol.c
+HVAC_SOURCES = hvac_controller.c pid.c hvac_hardware.c protocol.c ipc.c
 HVAC_OBJECTS = $(HVAC_SOURCES:.c=.o)
 
 POWER_TARGET  = power_meter
-POWER_SOURCES = power_meter.c power_hardware.c protocol.c
+POWER_SOURCES = power_meter.c power_hardware.c ipc.c protocol.c
 POWER_OBJECTS = $(POWER_SOURCES:.c=.o)
 
 OCCUPANCY_TARGET  = occupancy_sensor
@@ -26,12 +26,12 @@ $(SENSOR_TARGET): $(SENSOR_OBJECTS)
 
 $(HVAC_TARGET): $(HVAC_OBJECTS)
 	@echo "Linking HVAC..."
-	$(CC) $(CFLAGS) -o $(HVAC_TARGET) $(HVAC_OBJECTS) -lm
+	$(CC) $(CFLAGS) -o $(HVAC_TARGET) $(HVAC_OBJECTS) -lm -lrt -lpthread
 	@echo "HVAC build successful"
 
 $(POWER_TARGET): $(POWER_OBJECTS)
 	@echo "Linking power meter..."
-	$(CC) $(CFLAGS) -o $(POWER_TARGET) $(POWER_OBJECTS) -lm
+	$(CC) $(CFLAGS) -o $(POWER_TARGET) $(POWER_OBJECTS) -lm -lrt -lpthread
 	@echo "Power meter build successful"
 
 $(OCCUPANCY_TARGET): $(OCCUPANCY_OBJECTS)

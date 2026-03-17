@@ -7,19 +7,25 @@
  *   value2 = cooler_pct
  *   value3 = current_temp
  *   value4 = setpoint
+ *
+ * IPC: Writes HVACSharedState to shared memory every iteration so
+ *      power_meter can read real HVAC load instead of simulating randomly.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <time.h>
 #include "pid.h"
 #include "hvac_hardware.h"
 #include "protocol.h"
+#include "ipc.h"
 
 #define GATEWAY_PORT         8080
 #define DEFAULT_GATEWAY_HOST "127.0.0.1"
@@ -37,6 +43,20 @@ int  connect_to_gateway(void);
 void run_hvac_loop(HVACConfig *config, int sockfd);
 float simulate_temperature_physics(float current_temp, float heater_power,
                                    float cooler_power, float dt);
+
+// Global IPC handles (needed by signal handler for cleanup)
+static HVACSharedState *g_shm_state = NULL;
+static sem_t           *g_sem       = NULL;
+
+// Signal handler — clean up shared memory on Ctrl+C or kill
+static void handle_signal(int sig) {
+    (void)sig;
+    printf("\n[HVAC] Shutting down...\n");
+    if (g_shm_state) ipc_close_shm(g_shm_state);
+    ipc_destroy_shm();
+    if (g_sem) ipc_close_sem(g_sem);
+    exit(0);
+}
 
 // NEW: reads GATEWAY_HOST env var, falls back to 127.0.0.1 (same pattern as network.c)
 static const char* get_gateway_host(void) {
@@ -56,6 +76,21 @@ int main(int argc, char *argv[]) {
     // Parse configuration
     HVACConfig config = parse_hvac_config(argc, argv);
 
+    // Set up signal handler for clean IPC shutdown
+    signal(SIGINT,  handle_signal);
+    signal(SIGTERM, handle_signal);
+
+    // Initialize IPC — create shared memory and semaphore
+    printf("[HVAC] Initializing IPC...\n");
+    g_sem = ipc_create_sem();
+    if (g_sem == SEM_FAILED) {
+        printf("[HVAC] WARNING: Semaphore creation failed, running without IPC\n");
+    }
+    g_shm_state = ipc_create_shm();
+    if (!g_shm_state) {
+        printf("[HVAC] WARNING: Shared memory creation failed, running without IPC\n");
+    }
+
     // Connect to gateway
     int sockfd = connect_to_gateway();
     if (sockfd < 0) {
@@ -68,6 +103,9 @@ int main(int argc, char *argv[]) {
 
     // Cleanup
     if (sockfd >= 0) close(sockfd);
+    if (g_shm_state) ipc_close_shm(g_shm_state);
+    if (g_sem) ipc_close_sem(g_sem);
+    ipc_destroy_shm();
     return 0;
 }
 
@@ -198,6 +236,18 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
         if (config->use_hardware) {
             // set_heater_power(heater_power);  // Uncomment for real ESP32
             // set_cooler_power(cooler_power);
+        }
+
+        // Write state to shared memory (for power_meter to read)
+        if (g_shm_state && g_sem != SEM_FAILED) {
+            sem_wait(g_sem);                          // lock
+            g_shm_state->heater_pct   = heater_power;
+            g_shm_state->cooler_pct   = cooler_power;
+            g_shm_state->current_temp = current_temp;
+            g_shm_state->setpoint     = config->setpoint;
+            g_shm_state->timestamp    = (uint32_t)time(NULL);
+            g_shm_state->is_valid     = 1;            // mark as ready to read
+            sem_post(g_sem);                          // unlock
         }
 
         // Send V2 packet to gateway
