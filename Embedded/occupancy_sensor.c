@@ -3,6 +3,7 @@
  *
  * Reads occupancy count (people in zone) from VL53L1X ToF sensor
  * and streams packets to the gateway over TCP.
+ * Also publishes to MQTT broker as parallel transport.
  *
  * Packet type: PACKET_TYPE_OCCUPANCY (3)
  * Value field: people count as float (e.g. 5.0 = 5 people)
@@ -28,6 +29,7 @@
 #include <netdb.h>
 #include "protocol.h"
 #include "occupancy_hardware.h"
+#include "mqtt_client.h"
 
 #define GATEWAY_PORT         8080
 #define DEFAULT_GATEWAY_HOST "127.0.0.1"
@@ -184,6 +186,18 @@ void run_occupancy_loop(OccupancyConfig *config, int sockfd) {
         }
     }
 
+    // Initialize MQTT client
+    MQTTClient mqtt;
+    int mqtt_ok = 0;
+    if (mqtt_init(&mqtt, config->device_id, config->zone) == 0) {
+        if (mqtt_connect(&mqtt) == 0) {
+            mqtt_ok = 1;
+            printf("[OCCUPANCY] MQTT connected — dual transport active\n");
+        } else {
+            printf("[OCCUPANCY] MQTT unavailable — TCP only\n");
+        }
+    }
+
     printf("[OCCUPANCY] Mode: %s\n",
            config->use_hardware ? "REAL HARDWARE (VL53L1X)" : "SOFTWARE SIMULATION");
     printf("[OCCUPANCY] Press Ctrl+C to stop\n");
@@ -212,12 +226,17 @@ void run_occupancy_loop(OccupancyConfig *config, int sockfd) {
         Packet pkt;
         pack_packet(&pkt, config->device_id, (float)people_count, PACKET_TYPE_OCCUPANCY);
 
-        // Send to gateway
+        // Send via TCP
         ssize_t bytes_sent = send(sockfd, &pkt, sizeof(Packet), 0);
         if (bytes_sent < 0) {
             perror("[OCCUPANCY ERROR] send()");
-            printf("[OCCUPANCY] ✗ Transmission failed, stopping\n");
+            printf("[OCCUPANCY] ✗ TCP transmission failed, stopping\n");
             break;
+        }
+
+        // Publish via MQTT
+        if (mqtt_ok) {
+            mqtt_publish_occupancy(&mqtt, people_count);
         }
 
         // Log
@@ -233,4 +252,9 @@ void run_occupancy_loop(OccupancyConfig *config, int sockfd) {
 
     printf("─────────────────────────────────────────────\n");
     printf("[OCCUPANCY] Total packets sent: %d\n", packet_count);
+
+    // Cleanup MQTT
+    if (mqtt_ok) {
+        mqtt_disconnect(&mqtt);
+    }
 }

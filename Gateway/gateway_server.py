@@ -4,10 +4,13 @@ gateway_server.py - Gateway Orchestration Logic
 Coordinates all gateway modules:
 1. Configuration
 2. Database connection
-3. Network server
-4. Analytics engine
-5. Process orchestration
-6. Cleanup
+3. Orchestration rules
+4. Process manager
+5. Data storage
+6. Analytics engine
+7. MQTT subscriber
+8. Network server
+9. Cleanup
 """
 
 from config import load_configuration
@@ -16,6 +19,7 @@ from analytics import CircularBuffer, AnalyticsEngine
 from orchestration_config import OrchestrationConfig
 from process_manager import ProcessManager
 from db_writer import DBWriter
+from mqtt_subscriber import MQTTSubscriber
 
 
 def run_gateway(use_hardware=False):
@@ -62,14 +66,20 @@ def run_gateway(use_hardware=False):
     buffer = CircularBuffer(size=config.buffer_size)
     print(f"[STORAGE] Circular buffer initialized (size: {config.buffer_size})\n")
 
-    # STEP 6: Analytics
+    # STEP 6: Analytics Engine
     print("--- Step 6: Analytics Engine ---")
     analytics = AnalyticsEngine(buffer, interval=config.analytics_interval, db=db)
     analytics.start()
     print()
 
-    # STEP 7: Network Server
-    print("--- Step 7: Network Server ---")
+    # STEP 7: MQTT Subscriber (parallel transport alongside TCP)
+    print("--- Step 7: MQTT Subscriber ---")
+    mqtt_sub = MQTTSubscriber(db=db)
+    mqtt_sub.start()
+    print()
+
+    # STEP 8: Network Server (TCP — existing transport)
+    print("--- Step 8: Network Server ---")
     server = TCPServer(config, buffer, process_mgr, orch_config, db)
 
     try:
@@ -78,8 +88,9 @@ def run_gateway(use_hardware=False):
         print(f"[ORCHESTRATOR] Server error: {e}")
         return 1
     finally:
-        # STEP 8: Cleanup
-        print("\n--- Step 8: Cleanup ---")
+        # STEP 9: Cleanup
+        print("\n--- Step 9: Cleanup ---")
+        mqtt_sub.stop()
         analytics.stop()
         process_mgr.cleanup_all()
         if db:

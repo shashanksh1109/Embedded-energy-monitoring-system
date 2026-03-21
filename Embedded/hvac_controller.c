@@ -26,6 +26,7 @@
 #include "hvac_hardware.h"
 #include "protocol.h"
 #include "ipc.h"
+#include "mqtt_client.h"
 
 #define GATEWAY_PORT         8080
 #define DEFAULT_GATEWAY_HOST "127.0.0.1"
@@ -47,14 +48,17 @@ float simulate_temperature_physics(float current_temp, float heater_power,
 // Global IPC handles (needed by signal handler for cleanup)
 static HVACSharedState *g_shm_state = NULL;
 static sem_t           *g_sem       = NULL;
+static MQTTClient       g_mqtt;
+static int              g_mqtt_ok   = 0;
 
-// Signal handler — clean up shared memory on Ctrl+C or kill
+// Signal handler — clean up shared memory and MQTT on Ctrl+C or kill
 static void handle_signal(int sig) {
     (void)sig;
     printf("\n[HVAC] Shutting down...\n");
     if (g_shm_state) ipc_close_shm(g_shm_state);
     ipc_destroy_shm();
     if (g_sem) ipc_close_sem(g_sem);
+    if (g_mqtt_ok) mqtt_disconnect(&g_mqtt);
     exit(0);
 }
 
@@ -105,6 +109,7 @@ int main(int argc, char *argv[]) {
     if (sockfd >= 0) close(sockfd);
     if (g_shm_state) ipc_close_shm(g_shm_state);
     if (g_sem) ipc_close_sem(g_sem);
+    if (g_mqtt_ok) mqtt_disconnect(&g_mqtt);
     ipc_destroy_shm();
     return 0;
 }
@@ -190,6 +195,16 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
         initialize_hvac_hardware();
     }
 
+    // Initialize MQTT client
+    if (mqtt_init(&g_mqtt, config->device_id, config->zone) == 0) {
+        if (mqtt_connect(&g_mqtt) == 0) {
+            g_mqtt_ok = 1;
+            printf("[HVAC] MQTT connected — dual transport active\n");
+        } else {
+            printf("[HVAC] MQTT unavailable — TCP only\n");
+        }
+    }
+
     printf("[HVAC] Starting control loop...\n");
     printf("[HVAC] Setpoint: %.1f°C\n", config->setpoint);
     printf("[HVAC] PID Gains: Kp=%.1f, Ki=%.1f, Kd=%.1f\n", pid.kp, pid.ki, pid.kd);
@@ -248,6 +263,12 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
             g_shm_state->timestamp    = (uint32_t)time(NULL);
             g_shm_state->is_valid     = 1;            // mark as ready to read
             sem_post(g_sem);                          // unlock
+        }
+
+        // Publish via MQTT
+        if (g_mqtt_ok) {
+            mqtt_publish_hvac(&g_mqtt, heater_power, cooler_power,
+                              current_temp, config->setpoint);
         }
 
         // Send V2 packet to gateway
