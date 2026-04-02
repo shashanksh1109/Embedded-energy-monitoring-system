@@ -1,12 +1,10 @@
 package com.energy.model;
-
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
@@ -36,6 +34,5 @@ public class OccupancyReading {
     private Float distanceMm;
 
     @Column(name = "recorded_at", nullable = false)
-    private LocalDateTime recordedAt;
-
+    private OffsetDateTime recordedAt;
 }

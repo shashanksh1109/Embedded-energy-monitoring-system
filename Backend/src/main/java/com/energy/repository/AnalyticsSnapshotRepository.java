@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,8 +54,8 @@ public interface AnalyticsSnapshotRepository extends JpaRepository<AnalyticsSnap
     List<AnalyticsSnapshot> findByZoneNameAndMetricTypeAndSnapshotAtBetweenOrderBySnapshotAtDesc(
         String zoneName,
         String metricType,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     );
 
     /**
@@ -90,8 +90,8 @@ public interface AnalyticsSnapshotRepository extends JpaRepository<AnalyticsSnap
      */
     List<AnalyticsSnapshot> findByZoneNameAndSnapshotAtBetweenOrderBySnapshotAtDesc(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     );
 
     /**
@@ -123,8 +123,8 @@ public interface AnalyticsSnapshotRepository extends JpaRepository<AnalyticsSnap
     Optional<Double> findOverallAverage(
         @Param("zoneName") String zoneName,
         @Param("metricType") String metricType,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
     /**

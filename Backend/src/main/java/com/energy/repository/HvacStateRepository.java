@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,8 +40,8 @@ public interface HvacStateRepository extends JpaRepository<HvacState, UUID> {
      */
     List<HvacState> findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     );
 
     /**
@@ -90,8 +90,8 @@ public interface HvacStateRepository extends JpaRepository<HvacState, UUID> {
            "ORDER BY h.recordedAt ASC")
     List<HvacState> findHeatingStates(
         @Param("zoneName") String zoneName,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
     /**
@@ -115,8 +115,8 @@ public interface HvacStateRepository extends JpaRepository<HvacState, UUID> {
            "ORDER BY h.recordedAt ASC")
     List<HvacState> findCoolingStates(
         @Param("zoneName") String zoneName,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
     /**
@@ -145,8 +145,8 @@ public interface HvacStateRepository extends JpaRepository<HvacState, UUID> {
            "AND h.recordedAt BETWEEN :from AND :to")
     Optional<Object[]> findAverageUsage(
         @Param("zoneName") String zoneName,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
 }

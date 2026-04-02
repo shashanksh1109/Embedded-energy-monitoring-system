@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -21,7 +21,7 @@ public class HvacStateResponse {
     private Float coolerPct;
     private Float currentTemp;
     private Float setpoint;
-    private LocalDateTime recordedAt;
+    private OffsetDateTime recordedAt;
 
     // Convenience field — tells the dashboard at a glance
     // what mode the HVAC is in without checking both percentages

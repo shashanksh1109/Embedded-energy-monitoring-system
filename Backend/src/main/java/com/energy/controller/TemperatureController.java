@@ -7,7 +7,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @RestController
@@ -80,7 +80,7 @@ public class TemperatureController {
      * @RequestParam with @DateTimeFormat:
      *   The URL contains a date string like "2026-03-25T00:00:00"
      *   Spring needs to know how to parse that string into
-     *   a LocalDateTime Java object.
+     *   a OffsetDateTime Java object.
      *
      *   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
      *   tells Spring to expect ISO 8601 format: yyyy-MM-ddTHH:mm:ss
@@ -91,8 +91,8 @@ public class TemperatureController {
     @GetMapping("/{zoneName}/range")
     public ResponseEntity<List<TemperatureResponse>> getRange(
         @PathVariable String zoneName,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
     ) {
         return ResponseEntity.ok(
             temperatureService.getReadingsForZoneBetween(zoneName, from, to)

@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -46,8 +46,8 @@ public class TemperatureService {
     @Transactional(readOnly = true)
     public List<TemperatureResponse> getReadingsForZoneBetween(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     ) {
         // Validate time range — from must be before to
         if (from.isAfter(to)) {
@@ -117,7 +117,7 @@ public class TemperatureService {
      * The controller just passes "how many hours back" —
      * the service calculates the actual from/to timestamps.
      *
-     * LocalDateTime.now() = current date and time
+     * OffsetDateTime.now() = current date and time
      * .minusHours(hours)  = subtract N hours from now
      *
      * Example: getReadingsForLastHours("Zone_A", 24)
@@ -129,8 +129,8 @@ public class TemperatureService {
         String zoneName,
         int hours
     ) {
-        LocalDateTime to = LocalDateTime.now();
-        LocalDateTime from = to.minusHours(hours);
+        OffsetDateTime to = OffsetDateTime.now();
+        OffsetDateTime from = to.minusHours(hours);
 
         return temperatureRepository
             .findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(zoneName, from, to)

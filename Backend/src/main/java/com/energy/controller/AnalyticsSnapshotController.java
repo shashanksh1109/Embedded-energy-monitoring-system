@@ -7,7 +7,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -65,8 +65,8 @@ public class AnalyticsSnapshotController {
     public ResponseEntity<List<AnalyticsSnapshotResponse>> getRange(
         @PathVariable String zoneName,
         @RequestParam String metric,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
     ) {
         return ResponseEntity.ok(
             analyticsSnapshotService.getSnapshotsForZoneBetween(zoneName, metric, from, to)
@@ -92,8 +92,8 @@ public class AnalyticsSnapshotController {
     public ResponseEntity<Map<String, Object>> getAverage(
         @PathVariable String zoneName,
         @RequestParam String metric,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
     ) {
         double average = analyticsSnapshotService.getOverallAverage(
             zoneName, metric, from, to

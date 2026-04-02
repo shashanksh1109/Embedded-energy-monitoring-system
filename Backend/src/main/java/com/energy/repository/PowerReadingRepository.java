@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,8 +40,8 @@ public interface PowerReadingRepository extends JpaRepository<PowerReading, UUID
      */
     List<PowerReading> findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     );
 
     /**
@@ -94,8 +94,8 @@ public interface PowerReadingRepository extends JpaRepository<PowerReading, UUID
            "AND p.recordedAt BETWEEN :from AND :to")
     Optional<Double> findEnergyConsumed(
         @Param("zoneName") String zoneName,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
     /**
@@ -117,8 +117,8 @@ public interface PowerReadingRepository extends JpaRepository<PowerReading, UUID
            "AND p.recordedAt BETWEEN :from AND :to")
     Optional<Double> findCostInRange(
         @Param("zoneName") String zoneName,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
     /**
@@ -142,8 +142,8 @@ public interface PowerReadingRepository extends JpaRepository<PowerReading, UUID
            "AND p.recordedAt BETWEEN :from AND :to")
     Optional<Double> findPeakPower(
         @Param("zoneName") String zoneName,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
     /**
@@ -165,8 +165,8 @@ public interface PowerReadingRepository extends JpaRepository<PowerReading, UUID
            "AND p.recordedAt BETWEEN :from AND :to")
     Optional<Double> findAveragePower(
         @Param("zoneName") String zoneName,
-        @Param("from") LocalDateTime from,
-        @Param("to") LocalDateTime to
+        @Param("from") OffsetDateTime from,
+        @Param("to") OffsetDateTime to
     );
 
 }

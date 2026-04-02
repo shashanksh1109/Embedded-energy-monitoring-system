@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -34,8 +34,8 @@ public class OccupancyService {
     @Transactional(readOnly = true)
     public List<OccupancyResponse> getReadingsForZoneBetween(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
             throw new RuntimeException(
@@ -106,7 +106,7 @@ public class OccupancyService {
      * valid state (zone might not have been active yet).
      */
     @Transactional(readOnly = true)
-    public int getPeakOccupancy(String zoneName, LocalDateTime from, LocalDateTime to) {
+    public int getPeakOccupancy(String zoneName, OffsetDateTime from, OffsetDateTime to) {
         return occupancyRepository
             .findPeakOccupancy(zoneName, from, to)
             .orElse(0);
@@ -118,8 +118,8 @@ public class OccupancyService {
      */
     @Transactional(readOnly = true)
     public List<OccupancyResponse> getReadingsForLastHours(String zoneName, int hours) {
-        LocalDateTime to = LocalDateTime.now();
-        LocalDateTime from = to.minusHours(hours);
+        OffsetDateTime to = OffsetDateTime.now();
+        OffsetDateTime from = to.minusHours(hours);
 
         return occupancyRepository
             .findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(zoneName, from, to)
@@ -141,8 +141,8 @@ public class OccupancyService {
     @Transactional(readOnly = true)
     public List<OccupancyResponse> getOccupiedReadings(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
             throw new RuntimeException(

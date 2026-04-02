@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,8 +39,8 @@ public class AnalyticsSnapshotService {
     public List<AnalyticsSnapshotResponse> getSnapshotsForZoneBetween(
         String zoneName,
         String metricType,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     ) {
         validateMetricType(metricType);
 
@@ -81,8 +81,8 @@ public class AnalyticsSnapshotService {
     public double getOverallAverage(
         String zoneName,
         String metricType,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     ) {
         validateMetricType(metricType);
 

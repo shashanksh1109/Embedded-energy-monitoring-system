@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -18,7 +18,7 @@ public class TemperatureResponse {
     private String deviceId;
     private String zoneName;
     private Float temperatureC;
-    private LocalDateTime recordedAt;
+    private OffsetDateTime recordedAt;
 
     public static TemperatureResponse from(com.energy.model.TemperatureReading reading) {
         return TemperatureResponse.builder()

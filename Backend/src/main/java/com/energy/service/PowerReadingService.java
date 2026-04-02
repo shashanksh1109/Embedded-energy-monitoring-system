@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,8 +39,8 @@ public class PowerReadingService {
     @Transactional(readOnly = true)
     public List<PowerReadingResponse> getReadingsForZoneBetween(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
             throw new RuntimeException(
@@ -86,8 +86,8 @@ public class PowerReadingService {
      */
     @Transactional(readOnly = true)
     public List<PowerReadingResponse> getReadingsForLastHours(String zoneName, int hours) {
-        LocalDateTime to = LocalDateTime.now();
-        LocalDateTime from = to.minusHours(hours);
+        OffsetDateTime to = OffsetDateTime.now();
+        OffsetDateTime from = to.minusHours(hours);
 
         return powerReadingRepository
             .findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(zoneName, from, to)
@@ -114,8 +114,8 @@ public class PowerReadingService {
     @Transactional(readOnly = true)
     public Map<String, Object> getEnergySummary(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
             throw new RuntimeException(

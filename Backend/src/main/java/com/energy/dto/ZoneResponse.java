@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -18,7 +18,7 @@ public class ZoneResponse {
     private String name;
     private String description;
     private Integer capacity;
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     // Converts Zone entity → ZoneResponse DTO
     public static ZoneResponse from(com.energy.model.Zone zone) {

@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -19,7 +19,7 @@ public class OccupancyResponse {
     private String zoneName;
     private Integer occupancyCount;
     private Float distanceMm;
-    private LocalDateTime recordedAt;
+    private OffsetDateTime recordedAt;
 
     public static OccupancyResponse from(com.energy.model.OccupancyReading reading) {
         return OccupancyResponse.builder()

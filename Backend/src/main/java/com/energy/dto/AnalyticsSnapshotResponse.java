@@ -1,11 +1,9 @@
 package com.energy.dto;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -13,7 +11,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AnalyticsSnapshotResponse {
-
     private UUID id;
     private String zoneName;
     private String metricType;
@@ -22,11 +19,7 @@ public class AnalyticsSnapshotResponse {
     private Float minVal;
     private Float maxVal;
     private Integer sampleCount;
-    private LocalDateTime snapshotAt;
-
-    // Computed field — max minus min, shows spread of values in this window
-    // Not stored in DB — calculated during mapping
-    // e.g. min=17.4, max=24.5 → range=7.1
+    private OffsetDateTime snapshotAt;
     private Float range;
 
     public static AnalyticsSnapshotResponse from(com.energy.model.AnalyticsSnapshot snapshot) {
@@ -40,8 +33,7 @@ public class AnalyticsSnapshotResponse {
             .maxVal(snapshot.getMaxVal())
             .sampleCount(snapshot.getSampleCount())
             .snapshotAt(snapshot.getSnapshotAt())
-            .range(snapshot.getMaxVal() - snapshot.getMinVal())  // computed here
+            .range(snapshot.getMaxVal() - snapshot.getMinVal())
             .build();
     }
-
 }

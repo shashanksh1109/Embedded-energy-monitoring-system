@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,8 +46,8 @@ public interface TemperatureRepository extends JpaRepository<TemperatureReading,
      */
     List<TemperatureReading> findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(
         String zoneName,
-        LocalDateTime from,
-        LocalDateTime to
+        OffsetDateTime from,
+        OffsetDateTime to
     );
 
     /**
