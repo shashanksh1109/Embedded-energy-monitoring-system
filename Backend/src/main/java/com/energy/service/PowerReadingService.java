@@ -64,9 +64,7 @@ public class PowerReadingService {
         return powerReadingRepository
             .findTop1ByZoneNameOrderByRecordedAtDesc(zoneName)
             .map(PowerReadingResponse::from)
-            .orElseThrow(() ->
-                new RuntimeException("No power readings found for zone: " + zoneName)
-            );
+            .orElse(null);
     }
 
     /**

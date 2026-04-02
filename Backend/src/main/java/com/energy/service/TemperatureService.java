@@ -72,9 +72,7 @@ public class TemperatureService {
         return temperatureRepository
             .findTop1ByZoneNameOrderByRecordedAtDesc(zoneName)
             .map(TemperatureResponse::from)
-            .orElseThrow(() ->
-                new RuntimeException("No temperature readings found for zone: " + zoneName)
-            );
+            .orElse(null);
     }
 
     /**

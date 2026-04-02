@@ -59,9 +59,7 @@ public class OccupancyService {
         return occupancyRepository
             .findTop1ByZoneNameOrderByRecordedAtDesc(zoneName)
             .map(OccupancyResponse::from)
-            .orElseThrow(() ->
-                new RuntimeException("No occupancy readings found for zone: " + zoneName)
-            );
+            .orElse(null);
     }
 
     /**

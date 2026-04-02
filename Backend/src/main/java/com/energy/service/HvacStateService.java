@@ -60,9 +60,7 @@ public class HvacStateService {
         return hvacStateRepository
             .findTop1ByZoneNameOrderByRecordedAtDesc(zoneName)
             .map(HvacStateResponse::from)
-            .orElseThrow(() ->
-                new RuntimeException("No HVAC state found for zone: " + zoneName)
-            );
+            .orElse(null);
     }
 
     /**
