@@ -1,8 +1,11 @@
 # Stage 1: Build environment (compile C programs)
 FROM gcc:11 AS builder
 
-# Install make
-RUN apt-get update && apt-get install -y make && rm -rf /var/lib/apt/lists/*
+# Install make and mosquitto dev library (needed for mqtt_client.h)
+RUN apt-get update && apt-get install -y \
+    make \
+    libmosquitto-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /build
@@ -19,6 +22,7 @@ FROM ubuntu:22.04
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     libc6 \
+    libmosquitto1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory

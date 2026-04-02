@@ -1,8 +1,5 @@
-version: '3.3'
-
 services:
 
-  # ─── PostgreSQL Database ──────────────────────────────────────────────────────
   db:
     image: postgres:15
     container_name: energy-db
@@ -18,8 +15,12 @@ services:
     networks:
       - energy-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U energy_user -d energy_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # ─── Python Gateway ───────────────────────────────────────────────────────────
   gateway:
     build:
       context: ./Gateway
@@ -27,11 +28,12 @@ services:
     container_name: energy-gateway
     ports:
       - "8080:8080"
-    depends_on:
-      - db
     networks:
       - energy-network
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       - PYTHONUNBUFFERED=1
       - DB_HOST=db
@@ -40,7 +42,6 @@ services:
       - DB_USER=energy_user
       - DB_PASSWORD=energy_pass
 
-  # ─── Temperature Sensor (C) ───────────────────────────────────────────────────
   sensor:
     build:
       context: ./Embedded
@@ -55,54 +56,31 @@ services:
     environment:
       - GATEWAY_HOST=gateway
 
-  # ─── HVAC Controller (C) ──────────────────────────────────────────────────────
-  hvac:
+  backend:
     build:
-      context: ./Embedded
+      context: ./Backend
       dockerfile: Dockerfile
-    container_name: energy-hvac
-    command: ["./hvac_controller", "HVAC_A", "Zone_A", "20.0"]
-    depends_on:
-      - gateway
+    container_name: energy-backend
+    ports:
+      - "8081:8081"
     networks:
       - energy-network
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
-      - GATEWAY_HOST=gateway
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=energy_db
+      - DB_USER=energy_user
+      - DB_PASSWORD=energy_pass
+      - JWT_SECRET=energy-monitoring-super-secret-key-change-in-production
+      - SPRING_PROFILES_ACTIVE=docker
 
-  # ─── Power Meter (C) ──────────────────────────────────────────────────────────
-  power:
-    build:
-      context: ./Embedded
-      dockerfile: Dockerfile
-    container_name: energy-power
-    command: ["./power_meter", "POWER_A", "Zone_A"]
-    depends_on:
-      - gateway
-    networks:
-      - energy-network
-    restart: unless-stopped
-    environment:
-      - GATEWAY_HOST=gateway
-
-  # ─── Occupancy Sensor (C) ─────────────────────────────────────────────────────
-  occupancy:
-    build:
-      context: ./Embedded
-      dockerfile: Dockerfile
-    container_name: energy-occupancy
-    command: ["./occupancy_sensor", "OCC_A", "Zone_A", "5"]
-    depends_on:
-      - gateway
-    networks:
-      - energy-network
-    restart: unless-stopped
-    environment:
-      - GATEWAY_HOST=gateway
+volumes:
+  postgres_data:
 
 networks:
   energy-network:
     driver: bridge
-
-volumes:
-  postgres_data:

@@ -1,0 +1,79 @@
+package com.energy.controller;
+
+import com.energy.dto.DeviceResponse;
+import com.energy.service.DeviceService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/devices")
+@RequiredArgsConstructor
+public class DeviceController {
+
+    private final DeviceService deviceService;
+
+    /**
+     * GET /api/devices
+     *
+     * Returns all devices across all zones.
+     *
+     * Example response:
+     * [
+     *   { "deviceId": "TEMP_A", "deviceType": "TEMP", "zoneName": "Zone_A", ... },
+     *   { "deviceId": "OCC_A",  "deviceType": "OCCUPANCY", "zoneName": "Zone_A", ... }
+     * ]
+     */
+    @GetMapping
+    public ResponseEntity<List<DeviceResponse>> getAllDevices() {
+        return ResponseEntity.ok(deviceService.getAllDevices());
+    }
+
+    /**
+     * GET /api/devices/zone/Zone_A
+     *
+     * Returns all devices in a specific zone.
+     *
+     * Notice the path is /zone/{zoneName} not just /{zoneName}.
+     * This avoids a URL conflict with GET /api/devices/{deviceId}
+     * below — Spring can't tell "Zone_A" from "TEMP_A" by value,
+     * only by path structure.
+     */
+    @GetMapping("/zone/{zoneName}")
+    public ResponseEntity<List<DeviceResponse>> getDevicesByZone(
+        @PathVariable String zoneName
+    ) {
+        return ResponseEntity.ok(deviceService.getDevicesByZone(zoneName));
+    }
+
+    /**
+     * GET /api/devices/zone/Zone_A/active
+     *
+     * Returns only active devices in a zone.
+     * Used by live dashboard — show only sensors currently running.
+     */
+    @GetMapping("/zone/{zoneName}/active")
+    public ResponseEntity<List<DeviceResponse>> getActiveDevices(
+        @PathVariable String zoneName
+    ) {
+        return ResponseEntity.ok(deviceService.getActiveDevicesByZone(zoneName));
+    }
+
+    /**
+     * GET /api/devices/TEMP_A
+     *
+     * Returns a single device by its string ID.
+     *
+     * @PathVariable maps {deviceId} from the URL.
+     * "TEMP_A" in the URL → deviceId = "TEMP_A" in the method.
+     */
+    @GetMapping("/{deviceId}")
+    public ResponseEntity<DeviceResponse> getDeviceById(
+        @PathVariable String deviceId
+    ) {
+        return ResponseEntity.ok(deviceService.getDeviceByDeviceId(deviceId));
+    }
+
+}

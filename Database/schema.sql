@@ -1,50 +1,50 @@
--- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS zones (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        VARCHAR(32) NOT NULL UNIQUE,
-    description VARCHAR(128),
+    name        VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255),
     capacity    INTEGER     NOT NULL DEFAULT 0,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS devices (
-    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id     VARCHAR(16) NOT NULL UNIQUE,
-    zone_id       UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
-    device_type   VARCHAR(16) NOT NULL,
-    use_hardware  BOOLEAN     NOT NULL DEFAULT FALSE,
-    description   VARCHAR(128),
-    registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id   VARCHAR(16) NOT NULL UNIQUE,
+    zone_id     UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+    device_type VARCHAR(32) NOT NULL,
+    use_hardware BOOLEAN    NOT NULL DEFAULT FALSE,
+    description VARCHAR(128),
+    is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS temperature_readings (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id   VARCHAR(16) NOT NULL,
-    zone_id     UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
-    value_c     FLOAT       NOT NULL,
-    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id     VARCHAR(16) NOT NULL,
+    zone_id       UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+    temperature_c FLOAT       NOT NULL,
+    recorded_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS occupancy_readings (
-    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id    VARCHAR(16) NOT NULL,
-    zone_id      UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
-    people_count INTEGER     NOT NULL CHECK (people_count >= 0),
-    recorded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id       VARCHAR(16) NOT NULL,
+    zone_id         UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+    occupancy_count INTEGER     NOT NULL CHECK (occupancy_count >= 0),
+    distance_mm     FLOAT       NOT NULL DEFAULT 0,
+    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS hvac_state (
-    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    device_id    VARCHAR(16) NOT NULL,
-    zone_id      UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
-    setpoint_c   FLOAT       NOT NULL,
-    heater_pct   FLOAT       NOT NULL CHECK (heater_pct  BETWEEN 0 AND 100),
-    cooler_pct   FLOAT       NOT NULL CHECK (cooler_pct  BETWEEN 0 AND 100),
-    pid_output   FLOAT       NOT NULL,
-    current_temp FLOAT       NOT NULL,
-    recorded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    device_id   VARCHAR(16) NOT NULL,
+    zone_id     UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+    heater_pct  FLOAT       NOT NULL CHECK (heater_pct  BETWEEN 0 AND 100),
+    cooler_pct  FLOAT       NOT NULL CHECK (cooler_pct  BETWEEN 0 AND 100),
+    current_temp FLOAT      NOT NULL,
+    setpoint    FLOAT       NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS power_readings (
@@ -54,67 +54,60 @@ CREATE TABLE IF NOT EXISTS power_readings (
     power_kw    FLOAT       NOT NULL CHECK (power_kw >= 0),
     energy_kwh  FLOAT       NOT NULL CHECK (energy_kwh >= 0),
     cost_usd    FLOAT       NOT NULL CHECK (cost_usd >= 0),
-    hvac_pct    FLOAT       NOT NULL CHECK (hvac_pct BETWEEN 0 AND 100),
     recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS schedules (
-    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    name              VARCHAR(64) NOT NULL,
-    day_of_week       SMALLINT    NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
-    start_time        TIME        NOT NULL,
-    end_time          TIME        NOT NULL,
-    setpoint_c        FLOAT       NOT NULL,
-    power_limit_kw    FLOAT       NOT NULL,
-    turn_off_if_empty BOOLEAN     NOT NULL DEFAULT TRUE,
-    is_active         BOOLEAN     NOT NULL DEFAULT TRUE,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT valid_time_range CHECK (end_time > start_time)
 );
 
 CREATE TABLE IF NOT EXISTS analytics_snapshots (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     zone_id      UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
-    packet_type  VARCHAR(16) NOT NULL,
-    mean         FLOAT       NOT NULL,
-    stddev       FLOAT       NOT NULL,
+    metric_type  VARCHAR(32) NOT NULL,
+    mean_val     FLOAT       NOT NULL,
+    stddev_val   FLOAT       NOT NULL,
     min_val      FLOAT       NOT NULL,
     max_val      FLOAT       NOT NULL,
     sample_count INTEGER     NOT NULL CHECK (sample_count > 0),
-    window_start TIMESTAMPTZ NOT NULL,
-    window_end   TIMESTAMPTZ NOT NULL,
-    recorded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    snapshot_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS orchestration_events (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    zone_id     UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
-    event_type  VARCHAR(32) NOT NULL,
-    description VARCHAR(256),
-    temperature FLOAT,
-    hvac_pid    INTEGER,
-    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    zone_id       UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+    event_type    VARCHAR(32) NOT NULL,
+    trigger_value FLOAT,
+    action_taken  VARCHAR(64),
+    occurred_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS schedules (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    zone_id      UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+    schedule_name VARCHAR(64) NOT NULL,
+    target_temp  FLOAT       NOT NULL,
+    start_time   TIME        NOT NULL,
+    end_time     TIME        NOT NULL,
+    days_of_week VARCHAR(20),
+    is_active    BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS ml_predictions (
-    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    zone_id             UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
-    model_name          VARCHAR(64) NOT NULL,
-    predicted_setpoint  FLOAT,
-    predicted_occupancy INTEGER,
-    confidence          FLOAT       CHECK (confidence BETWEEN 0.0 AND 1.0),
-    features_json       JSONB,
-    recorded_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    zone_id         UUID        NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+    model_name      VARCHAR(64) NOT NULL,
+    predicted_value FLOAT,
+    confidence      FLOAT       CHECK (confidence BETWEEN 0.0 AND 1.0),
+    features_json   JSONB,
+    predicted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_temp_zone_time   ON temperature_readings (zone_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_occ_zone_time    ON occupancy_readings   (zone_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_hvac_zone_time   ON hvac_state           (zone_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_power_zone_time  ON power_readings       (zone_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_analytics_zone   ON analytics_snapshots  (zone_id, packet_type, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_events_zone_time ON orchestration_events (zone_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_ml_zone_time     ON ml_predictions       (zone_id, recorded_at DESC);
-CREATE INDEX IF NOT EXISTS idx_schedules_day    ON schedules            (day_of_week, start_time);
+CREATE INDEX IF NOT EXISTS idx_temp_zone_time     ON temperature_readings (zone_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_occ_zone_time      ON occupancy_readings   (zone_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_hvac_zone_time     ON hvac_state           (zone_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_power_zone_time    ON power_readings       (zone_id, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_zone     ON analytics_snapshots  (zone_id, metric_type, snapshot_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_zone_time   ON orchestration_events (zone_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_schedules_zone     ON schedules            (zone_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_ml_zone_time       ON ml_predictions       (zone_id, predicted_at DESC);
 
 CREATE OR REPLACE FUNCTION cleanup_old_sensor_data()
 RETURNS void AS $$

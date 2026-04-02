@@ -200,27 +200,27 @@ class DBWriter:
     # WRITE FUNCTIONS (one per table)
     # ============================================================
 
-    def _write_temperature(self, device_id, zone_id, value_c, recorded_at):
+    def _write_temperature(self, device_id, zone_id, temperature_c, recorded_at):
         """Insert a temperature reading into temperature_readings."""
         self.cursor.execute(
             """
-            INSERT INTO temperature_readings (device_id, zone_id, value_c, recorded_at)
+            INSERT INTO temperature_readings (device_id, zone_id, temperature_c, recorded_at)
             VALUES (%s, %s, %s, %s)
             """,
-            (device_id, zone_id, value_c, recorded_at)
+            (device_id, zone_id, temperature_c, recorded_at)
         )
-        print(f"[DB] Wrote TEMP: {device_id} = {value_c:.2f}°C")
+        print(f"[DB] Wrote TEMP: {device_id} = {temperature_c:.2f}°C")
 
-    def _write_occupancy(self, device_id, zone_id, people_count, recorded_at):
+    def _write_occupancy(self, device_id, zone_id, occupancy_count, recorded_at):
         """Insert an occupancy reading into occupancy_readings."""
         self.cursor.execute(
             """
-            INSERT INTO occupancy_readings (device_id, zone_id, people_count, recorded_at)
+            INSERT INTO occupancy_readings (device_id, zone_id, occupancy_count, recorded_at)
             VALUES (%s, %s, %s, %s)
             """,
-            (device_id, zone_id, people_count, recorded_at)
+            (device_id, zone_id, occupancy_count, 0.0, recorded_at)
         )
-        print(f"[DB] Wrote OCCUPANCY: {device_id} = {people_count} people")
+        print(f"[DB] Wrote OCCUPANCY: {device_id} = {occupancy_count} people")
 
     def _write_power(self, device_id, zone_id, packet, recorded_at):
         """
@@ -233,15 +233,14 @@ class DBWriter:
         # Energy = power * time (1 second = 1/3600 hours)
         energy_kwh = power_kw / 3600.0
         cost_usd   = energy_kwh * 0.12   # $0.12 per kWh
-        hvac_pct   = 0.0                 # not available in current packet format
 
         self.cursor.execute(
             """
             INSERT INTO power_readings
-                (device_id, zone_id, power_kw, energy_kwh, cost_usd, hvac_pct, recorded_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (device_id, zone_id, power_kw, energy_kwh, cost_usd, recorded_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (device_id, zone_id, power_kw, energy_kwh, cost_usd, hvac_pct, recorded_at)
+            (device_id, zone_id, power_kw, energy_kwh, cost_usd, recorded_at)
         )
         print(f"[DB] Wrote POWER: {device_id} = {power_kw:.2f} kW")
 
@@ -254,22 +253,22 @@ class DBWriter:
         heater_pct   = packet.get('heater_pct',   packet.get('value1', 0.0))
         cooler_pct   = packet.get('cooler_pct',   packet.get('value2', 0.0))
         current_temp = packet.get('current_temp', packet.get('value3', 0.0))
-        setpoint_c   = packet.get('setpoint',     packet.get('value4', 0.0))
-        pid_output   = heater_pct if heater_pct > 0 else -cooler_pct
+        setpoint     = packet.get('setpoint',     packet.get('value4', 0.0))
+        
 
         self.cursor.execute(
             """
             INSERT INTO hvac_state
-                (device_id, zone_id, setpoint_c, heater_pct, cooler_pct,
-                 pid_output, current_temp, recorded_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (device_id, zone_id, heater_pct, cooler_pct,
+                 current_temp, setpoint, recorded_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (device_id, zone_id, setpoint_c, heater_pct, cooler_pct,
-             pid_output, current_temp, recorded_at)
+            (device_id, zone_id, heater_pct, cooler_pct,
+             current_temp, setpoint, recorded_at)
         )
         print(f"[DB] Wrote HVAC_STATE: {device_id} | "
               f"Heat:{heater_pct:.1f}% Cool:{cooler_pct:.1f}% "
-              f"Temp:{current_temp:.2f}°C Setpoint:{setpoint_c:.1f}°C")
+              f"Temp:{current_temp:.2f}°C Setpoint:{setpoint:.1f}°C")
 
     # ============================================================
     # ANALYTICS + EVENTS
@@ -295,16 +294,16 @@ class DBWriter:
                 self.cursor.execute(
                     """
                     INSERT INTO analytics_snapshots
-                        (zone_id, packet_type, mean, stddev, min_val, max_val,
-                         sample_count, window_start, window_end)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        (zone_id, metric_type, mean_val, stddev_val, min_val, max_val,
+                         sample_count, snapshot_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         zone_id, packet_type,
                         stats['mean'], stats['stddev'],
                         stats['min'],  stats['max'],
                         stats['count'],
-                        window_start,  window_end
+                        window_end
                     )
                 )
             print(f"[DB] Wrote analytics snapshot: {packet_type} zone={zone_id}")

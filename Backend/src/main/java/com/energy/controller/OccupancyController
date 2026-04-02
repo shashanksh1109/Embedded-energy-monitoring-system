@@ -1,0 +1,162 @@
+package com.energy.controller;
+
+import com.energy.dto.OccupancyResponse;
+import com.energy.service.OccupancyService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/occupancy")
+@RequiredArgsConstructor
+public class OccupancyController {
+
+    private final OccupancyService occupancyService;
+
+    /**
+     * GET /api/occupancy/Zone_A
+     *
+     * Returns all occupancy readings for a zone, newest first.
+     */
+    @GetMapping("/{zoneName}")
+    public ResponseEntity<List<OccupancyResponse>> getReadings(
+        @PathVariable String zoneName
+    ) {
+        return ResponseEntity.ok(occupancyService.getReadingsForZone(zoneName));
+    }
+
+    /**
+     * GET /api/occupancy/Zone_A/latest
+     *
+     * Returns the single most recent occupancy reading.
+     * Used by dashboard to show current people count.
+     */
+    @GetMapping("/{zoneName}/latest")
+    public ResponseEntity<OccupancyResponse> getLatest(
+        @PathVariable String zoneName
+    ) {
+        return ResponseEntity.ok(occupancyService.getLatestForZone(zoneName));
+    }
+
+    /**
+     * GET /api/occupancy/Zone_A/status
+     *
+     * Returns a simple occupied/empty status.
+     * Returns a Map instead of a DTO — just two fields.
+     *
+     * Response:
+     * {
+     *   "zoneName": "Zone_A",
+     *   "occupied": true
+     * }
+     *
+     * Map.of() builds this inline — no DTO class needed
+     * for such a small response.
+     */
+    @GetMapping("/{zoneName}/status")
+    public ResponseEntity<Map<String, Object>> getOccupancyStatus(
+        @PathVariable String zoneName
+    ) {
+        boolean occupied = occupancyService.isZoneOccupied(zoneName);
+        return ResponseEntity.ok(Map.of(
+            "zoneName", zoneName,
+            "occupied", occupied
+        ));
+    }
+
+    /**
+     * GET /api/occupancy/Zone_A/recent?hours=24
+     *
+     * Returns readings from the last N hours.
+     */
+    @GetMapping("/{zoneName}/recent")
+    public ResponseEntity<List<OccupancyResponse>> getRecent(
+        @PathVariable String zoneName,
+        @RequestParam(required = false, defaultValue = "24") int hours
+    ) {
+        return ResponseEntity.ok(
+            occupancyService.getReadingsForLastHours(zoneName, hours)
+        );
+    }
+
+    /**
+     * GET /api/occupancy/Zone_A/range?from=...&to=...
+     *
+     * Returns readings within a specific time range.
+     */
+    @GetMapping("/{zoneName}/range")
+    public ResponseEntity<List<OccupancyResponse>> getRange(
+        @PathVariable String zoneName,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+    ) {
+        return ResponseEntity.ok(
+            occupancyService.getReadingsForZoneBetween(zoneName, from, to)
+        );
+    }
+
+    /**
+     * GET /api/occupancy/Zone_A/peak?from=...&to=...
+     *
+     * Returns peak (maximum) occupancy count in a time range.
+     * Returns a Map — single number with context.
+     *
+     * Response:
+     * {
+     *   "zoneName": "Zone_A",
+     *   "peakOccupancy": 7,
+     *   "from": "2026-03-25T00:00:00",
+     *   "to": "2026-03-25T23:59:59"
+     * }
+     */
+    @GetMapping("/{zoneName}/peak")
+    public ResponseEntity<Map<String, Object>> getPeakOccupancy(
+        @PathVariable String zoneName,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+    ) {
+        int peak = occupancyService.getPeakOccupancy(zoneName, from, to);
+        return ResponseEntity.ok(Map.of(
+            "zoneName",       zoneName,
+            "peakOccupancy",  peak,
+            "from",           from,
+            "to",             to
+        ));
+    }
+
+    /**
+     * GET /api/occupancy/Zone_A/occupied?from=...&to=...
+     *
+     * Returns only readings where zone was occupied
+     * (occupancy_count > 0) within a time range.
+     * Used by room utilisation report.
+     */
+    @GetMapping("/{zoneName}/occupied")
+    public ResponseEntity<List<OccupancyResponse>> getOccupiedReadings(
+        @PathVariable String zoneName,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to
+    ) {
+        return ResponseEntity.ok(
+            occupancyService.getOccupiedReadings(zoneName, from, to)
+        );
+    }
+
+    /**
+     * GET /api/occupancy/Zone_A/sparkline
+     *
+     * Returns last 20 readings for sparkline chart.
+     */
+    @GetMapping("/{zoneName}/sparkline")
+    public ResponseEntity<List<OccupancyResponse>> getSparkline(
+        @PathVariable String zoneName
+    ) {
+        return ResponseEntity.ok(occupancyService.getRecentReadings(zoneName));
+    }
+
+}
