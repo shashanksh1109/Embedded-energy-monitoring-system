@@ -160,7 +160,7 @@ public class HvacStateService {
      */
     @Transactional(readOnly = true)
     public List<HvacStateResponse> getStatesForLastHours(String zoneName, int hours) {
-        OffsetDateTime to = OffsetDateTime.now();
+        OffsetDateTime to = OffsetDateTime.now(java.time.ZoneOffset.UTC);
         OffsetDateTime from = to.minusHours(hours);
 
         return hvacStateRepository

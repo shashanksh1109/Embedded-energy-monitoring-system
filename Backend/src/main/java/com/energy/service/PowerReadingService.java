@@ -84,7 +84,7 @@ public class PowerReadingService {
      */
     @Transactional(readOnly = true)
     public List<PowerReadingResponse> getReadingsForLastHours(String zoneName, int hours) {
-        OffsetDateTime to = OffsetDateTime.now();
+        OffsetDateTime to = OffsetDateTime.now(java.time.ZoneOffset.UTC);
         OffsetDateTime from = to.minusHours(hours);
 
         return powerReadingRepository

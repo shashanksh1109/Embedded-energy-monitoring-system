@@ -127,7 +127,7 @@ public class TemperatureService {
         String zoneName,
         int hours
     ) {
-        OffsetDateTime to = OffsetDateTime.now();
+        OffsetDateTime to = OffsetDateTime.now(java.time.ZoneOffset.UTC);
         OffsetDateTime from = to.minusHours(hours);
 
         return temperatureRepository

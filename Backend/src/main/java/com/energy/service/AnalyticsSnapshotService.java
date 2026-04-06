@@ -19,7 +19,7 @@ public class AnalyticsSnapshotService {
     private final AnalyticsSnapshotRepository analyticsSnapshotRepository;
 
     private static final List<String> VALID_METRIC_TYPES =
-        List.of("TEMP", "OCCUPANCY", "POWER", "HVAC");
+        List.of("TEMP", "OCCUPANCY", "POWER", "HVAC", "HVAC_STATE");
 
     @Transactional(readOnly = true)
     public List<AnalyticsSnapshotResponse> getSnapshotsForZone(
@@ -69,12 +69,7 @@ public class AnalyticsSnapshotService {
         return analyticsSnapshotRepository
             .findTop1ByZoneNameAndMetricTypeOrderBySnapshotAtDesc(zoneName, metricType)
             .map(AnalyticsSnapshotResponse::from)
-            .orElseThrow(() ->
-                new RuntimeException(
-                    "No analytics snapshots found for zone: "
-                    + zoneName + ", metric: " + metricType
-                )
-            );
+            .orElse(null);
     }
 
     @Transactional(readOnly = true)
