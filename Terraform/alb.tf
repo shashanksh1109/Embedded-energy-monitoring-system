@@ -189,3 +189,15 @@ output "backend_target_group_arn" {
   description = "Backend target group ARN — used in ECS service definition"
   value       = aws_lb_target_group.backend.arn
 }
+
+# Allow ECS tasks to talk to each other on port 8080
+# Sensor and HVAC/power need to reach the gateway container
+resource "aws_security_group_rule" "ecs_internal_8080" {
+  type                     = "ingress"
+  from_port                = 8080
+  to_port                  = 8080
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ecs.id
+  source_security_group_id = aws_security_group.ecs.id
+  description              = "Allow ECS tasks to communicate internally on port 8080"
+}
