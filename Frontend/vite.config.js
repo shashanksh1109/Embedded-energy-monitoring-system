@@ -7,6 +7,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+
+  // Vitest configuration
+  test: {
+    environment: 'jsdom',        // simulate browser DOM
+    globals: true,               // use describe/it/expect without imports
+    setupFiles: './src/test/setup.js',  // runs before each test file
+  },
+
   server: {
     host: true,
     proxy: {
