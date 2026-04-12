@@ -1,0 +1,38 @@
+#!/bin/bash
+# load-schema.sh — Load database schema into RDS
+# Run this after first deploy or after terraform destroy/apply
+# Requires: bastion EC2 or temporary RDS public access
+# Usage: ./scripts/load-schema.sh
+
+echo ""
+echo "================================================================"
+echo "  LOAD DATABASE SCHEMA"
+echo "================================================================"
+echo ""
+echo "  This script loads schema.sql into RDS."
+echo "  RDS is in a private subnet — requires bastion access."
+echo ""
+echo "  Steps to run manually:"
+echo "  1. Temporarily make RDS publicly accessible:"
+echo "     aws rds modify-db-instance \\"
+echo "       --db-instance-identifier energy-management-postgres \\"
+echo "       --publicly-accessible --apply-immediately"
+echo ""
+echo "  2. Wait ~3 minutes for RDS to apply"
+echo ""
+echo "  3. Get DB password:"
+echo "     aws secretsmanager get-secret-value \\"
+echo "       --secret-id energy-management/db-credentials \\"
+echo "       --query SecretString --output text"
+echo ""
+echo "  4. Run schema:"
+echo "     PGPASSWORD='<password>' psql \\"
+echo "       -h energy-management-postgres.cw968uwiq4ae.us-east-1.rds.amazonaws.com \\"
+echo "       -U energyadmin -d energydb \\"
+echo "       -f Database/schema.sql"
+echo ""
+echo "  5. Make RDS private again:"
+echo "     aws rds modify-db-instance \\"
+echo "       --db-instance-identifier energy-management-postgres \\"
+echo "       --no-publicly-accessible --apply-immediately"
+echo ""
