@@ -30,3 +30,14 @@ Gateway/__pycache__/
 
 # Logs
 *.log
+# Build artifacts — never commit these
+Backend/target/
+Frontend/dist/
+Frontend/node_modules/
+# Accidental files from terminal commands
+--cidr
+--group-id
+--port
+--protocol
+--region
+ecurity group
