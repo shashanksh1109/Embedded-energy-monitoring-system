@@ -1,13 +1,18 @@
 import axios from 'axios'
 
+// API URL priority:
+// 1. VITE_API_URL environment variable (set at build time)
+// 2. Relative /api (works when frontend and API are on same domain)
+// 3. Fallback to localhost for local development
+const API_URL = import.meta.env.VITE_API_URL || '/api'
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://energy-management-alb-1800546460.us-east-1.elb.amazonaws.com/api',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor — attach JWT token to every request automatically
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
@@ -19,7 +24,6 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor — if token expired (401), redirect to login
 api.interceptors.response.use(
   (response) => response,
   (error) => {

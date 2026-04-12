@@ -55,9 +55,11 @@ for svc in sensor hvac power; do
 done
 
 echo "  → Frontend (React)..."
+cd "$PROJECT_DIR/Terraform"
+ALB_DNS=$(terraform output -raw alb_dns_name)
 cd "$PROJECT_DIR/Frontend"
 npm ci --silent
-npm run build --silent
+VITE_API_URL="http://$ALB_DNS/api" npm run build --silent
 aws s3 sync dist/ \
   s3://energy-management-frontend-$ACCOUNT_ID/ \
   --delete --region $REGION --quiet
