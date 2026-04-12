@@ -1,14 +1,13 @@
 #!/bin/bash
 # aws-down.sh — Destroy all AWS resources
 # Usage: ./scripts/aws-down.sh
-# RDS takes a final snapshot before deletion (data preserved)
-# Cost after destroy: $0.00/hour
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 REGION="us-east-1"
+ACCOUNT_ID="993268716712"
 
 echo ""
 echo "================================================================"
@@ -25,10 +24,34 @@ if [ "$confirm" != "yes" ]; then
   exit 0
 fi
 
-# ─── Delete old RDS snapshot if exists ───────────────────────────────
-# terraform destroy fails if a snapshot with the same name already exists
+# ─── Empty S3 buckets ────────────────────────────────────────────────
 echo ""
-echo "[1/2] Checking for existing RDS snapshot..."
+echo "[1/4] Emptying S3 buckets..."
+aws s3 rm s3://energy-management-frontend-$ACCOUNT_ID/ \
+  --recursive --region $REGION 2>/dev/null || true
+echo "  ✓ S3 buckets emptied"
+
+# ─── Delete ECR images ───────────────────────────────────────────────
+echo ""
+echo "[2/4] Deleting ECR images..."
+for repo in backend gateway sensor hvac power; do
+  IMAGES=$(aws ecr list-images \
+    --region $REGION \
+    --repository-name energy-management/$repo \
+    --query 'imageIds[*]' \
+    --output json 2>/dev/null || echo "[]")
+  if [ "$IMAGES" != "[]" ] && [ "$IMAGES" != "" ]; then
+    aws ecr batch-delete-image \
+      --region $REGION \
+      --repository-name energy-management/$repo \
+      --image-ids "$IMAGES" > /dev/null 2>&1 || true
+  fi
+done
+echo "  ✓ ECR images deleted"
+
+# ─── Delete old RDS snapshot if exists ───────────────────────────────
+echo ""
+echo "[3/4] Checking for existing RDS snapshot..."
 EXISTING=$(aws rds describe-db-snapshots \
   --region $REGION \
   --db-snapshot-identifier energy-management-final-snapshot \
@@ -51,7 +74,7 @@ fi
 
 # ─── Terraform destroy ───────────────────────────────────────────────
 echo ""
-echo "[2/2] Destroying infrastructure..."
+echo "[4/4] Destroying infrastructure..."
 cd "$PROJECT_DIR/Terraform"
 terraform destroy -auto-approve
 

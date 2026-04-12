@@ -10,6 +10,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.project_name}-frontend-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
 
   tags = {
     Name = "${var.project_name}-frontend"
@@ -67,6 +68,7 @@ resource "aws_s3_bucket_policy" "frontend" {
 
 resource "aws_s3_bucket" "snapshots" {
   bucket = "${var.project_name}-snapshots-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
 
   tags = {
     Name = "${var.project_name}-snapshots"

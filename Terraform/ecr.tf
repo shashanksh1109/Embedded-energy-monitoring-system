@@ -5,7 +5,8 @@
 # ─── BACKEND (Spring Boot) ─────────────────────────────────────────────
 resource "aws_ecr_repository" "backend" {
   name                 = "${var.project_name}/backend"
-  image_tag_mutability = "MUTABLE"  # allows overwriting "latest" tag
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true  # allows overwriting "latest" tag
 
   # Scan images for security vulnerabilities on every push
   image_scanning_configuration {
@@ -21,6 +22,7 @@ resource "aws_ecr_repository" "backend" {
 resource "aws_ecr_repository" "gateway" {
   name                 = "${var.project_name}/gateway"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -35,6 +37,7 @@ resource "aws_ecr_repository" "gateway" {
 resource "aws_ecr_repository" "sensor" {
   name                 = "${var.project_name}/sensor"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -49,6 +52,7 @@ resource "aws_ecr_repository" "sensor" {
 resource "aws_ecr_repository" "hvac" {
   name                 = "${var.project_name}/hvac"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -63,6 +67,7 @@ resource "aws_ecr_repository" "hvac" {
 resource "aws_ecr_repository" "power" {
   name                 = "${var.project_name}/power"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
