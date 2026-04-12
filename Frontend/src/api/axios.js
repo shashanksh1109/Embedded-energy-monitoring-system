@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://energy-management-alb-1800546460.us-east-1.elb.amazonaws.com/api',
   headers: {
     'Content-Type': 'application/json',
   },

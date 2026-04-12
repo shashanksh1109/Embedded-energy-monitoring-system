@@ -1,0 +1,199 @@
+name: Deploy Energy Management System
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 993268716712.dkr.ecr.us-east-1.amazonaws.com
+  ECS_CLUSTER: energy-management-cluster
+
+jobs:
+  # ─── JOB 1: Deploy Backend ───────────────────────────────────────────
+  deploy-backend:
+    name: Build & Deploy Spring Boot Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build Spring Boot JAR
+        working-directory: Backend
+        run: mvn clean package -DskipTests -q
+
+      - name: Build and push backend Docker image
+        working-directory: Backend
+        run: |
+          docker build -t $ECR_REGISTRY/energy-management/backend:latest .
+          docker build -t $ECR_REGISTRY/energy-management/backend:${{ github.sha }} .
+          docker push $ECR_REGISTRY/energy-management/backend:latest
+          docker push $ECR_REGISTRY/energy-management/backend:${{ github.sha }}
+
+      - name: Deploy backend to ECS
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service energy-management-backend \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+  # ─── JOB 2: Deploy Frontend ──────────────────────────────────────────
+  deploy-frontend:
+    name: Build & Deploy React Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: Frontend
+        run: npm ci
+
+      - name: Build React app
+        working-directory: Frontend
+        run: npm run build
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync Frontend/dist/ \
+            s3://energy-management-frontend-993268716712/ \
+            --delete \
+            --region $AWS_REGION
+
+  # ─── JOB 3: Deploy Embedded Services ─────────────────────────────────
+  deploy-embedded:
+    name: Build & Deploy Embedded Services
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build embedded Docker image
+        working-directory: Embedded
+        run: docker build -t energy-embedded .
+
+      - name: Tag and push sensor image
+        run: |
+          docker tag energy-embedded \
+            $ECR_REGISTRY/energy-management/sensor:latest
+          docker tag energy-embedded \
+            $ECR_REGISTRY/energy-management/sensor:${{ github.sha }}
+          docker push $ECR_REGISTRY/energy-management/sensor:latest
+          docker push $ECR_REGISTRY/energy-management/sensor:${{ github.sha }}
+
+      - name: Tag and push HVAC image
+        run: |
+          docker tag energy-embedded \
+            $ECR_REGISTRY/energy-management/hvac:latest
+          docker tag energy-embedded \
+            $ECR_REGISTRY/energy-management/hvac:${{ github.sha }}
+          docker push $ECR_REGISTRY/energy-management/hvac:latest
+          docker push $ECR_REGISTRY/energy-management/hvac:${{ github.sha }}
+
+      - name: Tag and push power meter image
+        run: |
+          docker tag energy-embedded \
+            $ECR_REGISTRY/energy-management/power:latest
+          docker tag energy-embedded \
+            $ECR_REGISTRY/energy-management/power:${{ github.sha }}
+          docker push $ECR_REGISTRY/energy-management/power:latest
+          docker push $ECR_REGISTRY/energy-management/power:${{ github.sha }}
+
+      - name: Deploy embedded services to ECS
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service energy-management-sensor \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service energy-management-hvac \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service energy-management-power \
+            --force-new-deployment \
+            --region $AWS_REGION
+
+  # ─── JOB 4: Deploy Gateway ───────────────────────────────────────────
+  deploy-gateway:
+    name: Build & Deploy Python Gateway
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push gateway Docker image
+        working-directory: Gateway
+        run: |
+          docker build -t $ECR_REGISTRY/energy-management/gateway:latest .
+          docker build -t $ECR_REGISTRY/energy-management/gateway:${{ github.sha }} .
+          docker push $ECR_REGISTRY/energy-management/gateway:latest
+          docker push $ECR_REGISTRY/energy-management/gateway:${{ github.sha }}
+
+      - name: Deploy gateway to ECS
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service energy-management-gateway \
+            --force-new-deployment \
+            --region $AWS_REGION

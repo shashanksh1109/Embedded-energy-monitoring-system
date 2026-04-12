@@ -8,6 +8,7 @@
 /mnt/c/Users/Shashank S H/Energy Management System/Backend/src/main/java/com/energy/controller/AnalyticsSnapshotController.java
 /mnt/c/Users/Shashank S H/Energy Management System/Backend/src/main/java/com/energy/dto/PowerReadingResponse.java
 /mnt/c/Users/Shashank S H/Energy Management System/Backend/src/main/java/com/energy/service/DeviceService.java
+/mnt/c/Users/Shashank S H/Energy Management System/Backend/src/main/java/com/energy/controller/HealthController.java
 /mnt/c/Users/Shashank S H/Energy Management System/Backend/src/main/java/com/energy/dto/ZoneResponse.java
 /mnt/c/Users/Shashank S H/Energy Management System/Backend/src/main/java/com/energy/controller/DeviceController.java
 /mnt/c/Users/Shashank S H/Energy Management System/Backend/src/main/java/com/energy/model/HvacState.java

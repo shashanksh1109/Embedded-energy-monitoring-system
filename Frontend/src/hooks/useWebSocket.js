@@ -16,7 +16,7 @@ export function useWebSocket(zone) {
     const token = localStorage.getItem('token')
 
     const client = new Client({
-      webSocketFactory: () => new SockJS('/ws'),
+      webSocketFactory: () => new SockJS('http://energy-management-alb-1800546460.us-east-1.elb.amazonaws.com/ws'),
       connectHeaders: {
         Authorization: `Bearer ${token}`,
       },

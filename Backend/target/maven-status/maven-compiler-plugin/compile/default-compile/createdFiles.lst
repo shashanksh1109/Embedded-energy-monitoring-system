@@ -14,6 +14,7 @@ com/energy/controller/TemperatureController.class
 com/energy/repository/PowerReadingRepository.class
 com/energy/dto/AnalyticsSnapshotResponse.class
 com/energy/model/OccupancyReading.class
+com/energy/controller/HealthController.class
 com/energy/controller/PowerReadingController.class
 com/energy/repository/ZoneRepository.class
 com/energy/config/SecurityConfig.class
