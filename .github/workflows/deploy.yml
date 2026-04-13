@@ -10,7 +10,6 @@ env:
   ECS_CLUSTER: energy-management-cluster
 
 jobs:
-  # ─── JOB 1: Test Backend ─────────────────────────────────────────────
   test-backend:
     name: Run Backend Tests
     runs-on: ubuntu-latest
@@ -30,7 +29,6 @@ jobs:
           name: backend-test-results
           path: Backend/target/surefire-reports/
 
-  # ─── JOB 2: Test Frontend ────────────────────────────────────────────
   test-frontend:
     name: Run Frontend Tests
     runs-on: ubuntu-latest
@@ -48,7 +46,6 @@ jobs:
         working-directory: Frontend
         run: npm test
 
-  # ─── JOB 3: Test Gateway ─────────────────────────────────────────────
   test-gateway:
     name: Run Gateway Tests
     runs-on: ubuntu-latest
@@ -64,7 +61,6 @@ jobs:
         working-directory: Gateway
         run: python3 -m pytest tests/ -v
 
-  # ─── JOB 4: Deploy Backend ───────────────────────────────────────────
   deploy-backend:
     name: Build & Deploy Spring Boot Backend
     runs-on: ubuntu-latest
@@ -88,7 +84,8 @@ jobs:
         working-directory: Backend
         run: |
           docker build -t $ECR_REGISTRY/energy-management/backend:latest .
-          docker build -t $ECR_REGISTRY/energy-management/backend:${{ github.sha }} .
+          docker tag $ECR_REGISTRY/energy-management/backend:latest \
+            $ECR_REGISTRY/energy-management/backend:${{ github.sha }}
           docker push $ECR_REGISTRY/energy-management/backend:latest
           docker push $ECR_REGISTRY/energy-management/backend:${{ github.sha }}
       - name: Deploy to ECS
@@ -99,7 +96,6 @@ jobs:
             --force-new-deployment \
             --region $AWS_REGION
 
-  # ─── JOB 5: Deploy Frontend ──────────────────────────────────────────
   deploy-frontend:
     name: Build & Deploy React Frontend
     runs-on: ubuntu-latest
@@ -121,6 +117,8 @@ jobs:
         run: npm ci
       - name: Build React app
         working-directory: Frontend
+        env:
+          VITE_API_URL: http://energy-management-alb-1672504354.us-east-1.elb.amazonaws.com
         run: npm run build
       - name: Deploy to S3
         run: |
@@ -129,7 +127,6 @@ jobs:
             --delete \
             --region $AWS_REGION
 
-  # ─── JOB 6: Deploy Embedded Services ─────────────────────────────────
   deploy-embedded:
     name: Build & Deploy Embedded Services
     runs-on: ubuntu-latest
@@ -150,21 +147,15 @@ jobs:
           docker tag energy-embedded $ECR_REGISTRY/energy-management/sensor:${{ github.sha }}
           docker push $ECR_REGISTRY/energy-management/sensor:latest
           docker push $ECR_REGISTRY/energy-management/sensor:${{ github.sha }}
-      - name: Push HVAC image
-        run: |
-          docker tag energy-embedded $ECR_REGISTRY/energy-management/hvac:latest
-          docker tag energy-embedded $ECR_REGISTRY/energy-management/hvac:${{ github.sha }}
-          docker push $ECR_REGISTRY/energy-management/hvac:latest
-          docker push $ECR_REGISTRY/energy-management/hvac:${{ github.sha }}
       - name: Push power image
         run: |
           docker tag energy-embedded $ECR_REGISTRY/energy-management/power:latest
           docker tag energy-embedded $ECR_REGISTRY/energy-management/power:${{ github.sha }}
           docker push $ECR_REGISTRY/energy-management/power:latest
           docker push $ECR_REGISTRY/energy-management/power:${{ github.sha }}
-      - name: Deploy to ECS
+      - name: Deploy sensor and power to ECS
         run: |
-          for svc in sensor hvac power; do
+          for svc in sensor power; do
             aws ecs update-service \
               --cluster $ECS_CLUSTER \
               --service energy-management-$svc \
@@ -172,7 +163,6 @@ jobs:
               --region $AWS_REGION
           done
 
-  # ─── JOB 7: Deploy Gateway ───────────────────────────────────────────
   deploy-gateway:
     name: Build & Deploy Python Gateway
     runs-on: ubuntu-latest
@@ -189,7 +179,8 @@ jobs:
         working-directory: Gateway
         run: |
           docker build -t $ECR_REGISTRY/energy-management/gateway:latest .
-          docker build -t $ECR_REGISTRY/energy-management/gateway:${{ github.sha }} .
+          docker tag $ECR_REGISTRY/energy-management/gateway:latest \
+            $ECR_REGISTRY/energy-management/gateway:${{ github.sha }}
           docker push $ECR_REGISTRY/energy-management/gateway:latest
           docker push $ECR_REGISTRY/energy-management/gateway:${{ github.sha }}
       - name: Deploy to ECS
