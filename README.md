@@ -1,663 +1,490 @@
 # 🏢 Embedded Energy Monitoring System
 
-A distributed IoT platform for real-time building energy monitoring and thermal management, demonstrating professional embedded systems programming, custom binary protocols, and distributed architecture.
+A full-stack distributed IoT platform for real-time building energy monitoring and thermal management — deployed on AWS. Demonstrates embedded systems programming, custom binary protocols, distributed architecture, cloud infrastructure, and CI/CD automation.
 
-[![Language](https://img.shields.io/badge/Language-C%20%7C%20Python-blue)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
-[![Protocol](https://img.shields.io/badge/Protocol-TCP%2FIP-green)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
-[![Architecture](https://img.shields.io/badge/Architecture-Distributed-orange)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
+[![Language](https://img.shields.io/badge/Language-C%20%7C%20Python%20%7C%20Java%20%7C%20React-blue)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
+[![Cloud](https://img.shields.io/badge/Cloud-AWS%20ECS%20Fargate-orange)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
+[![IaC](https://img.shields.io/badge/IaC-Terraform-purple)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-green)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
+
+---
+
+## 🌐 Live Deployment
+
+| Service | URL |
+|---|---|
+| **Frontend Dashboard** | http://energy-management-frontend-993268716712.s3-website-us-east-1.amazonaws.com |
+| **REST API** | http://energy-management-alb-1672504354.us-east-1.elb.amazonaws.com/api |
+| **API Health** | http://energy-management-alb-1672504354.us-east-1.elb.amazonaws.com/api/health |
+| **Credentials** | username: `admin` / password: `energy123` |
 
 ---
 
 ## 📋 Table of Contents
 
 - [System Architecture](#-system-architecture)
-- [Execution Flow](#-execution-flow)
-- [Data Flow](#-data-flow)
-- [Technical Stack](#-technical-stack)
+- [AWS Cloud Architecture](#-aws-cloud-architecture)
+- [Technology Stack](#-technology-stack)
 - [Project Structure](#-project-structure)
-- [Quick Start](#-quick-start)
 - [Features](#-features)
-- [Sample Output](#-sample-output)
+- [Data Flow](#-data-flow)
+- [Quick Start — Local](#-quick-start--local)
+- [Quick Start — AWS](#-quick-start--aws)
+- [CI/CD Pipeline](#-cicd-pipeline)
+- [API Reference](#-api-reference)
+- [Known Issues & Resolutions](#-known-issues--resolutions)
 
 ---
 
 ## 🏗️ System Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         BUILDING ZONES                              │
-│                                                                     │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐         │
-│  │   Zone A     │    │   Zone B     │    │  Zone C      │         │
-│  │ Conference   │    │  Executive   │    │  Basement    │         │
-│  │   Room       │    │   Office     │    │  Storage     │         │
-│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘         │
-│         │                   │                   │                  │
-└─────────┼───────────────────┼───────────────────┼──────────────────┘
-          │                   │                   │
-          │ TCP/IP            │ TCP/IP            │ TCP/IP
-          │ Binary Protocol   │ Binary Protocol   │ Binary Protocol
-          │ Port 8080         │ Port 8080         │ Port 8080
-          │                   │                   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
+│  │   Zone A     │    │   Zone B     │    │  Zone C      │          │
+│  │ Conference   │    │  Executive   │    │  Basement    │          │
+│  │   Room       │    │   Office     │    │  Storage     │          │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │
+└─────────┼───────────────────┼───────────────────┼───────────────────┘
+          │ TCP/IP Binary     │ TCP/IP Binary     │ TCP/IP Binary
+          │ Protocol V1/V2    │ Protocol V1/V2    │ Protocol V1/V2
           ▼                   ▼                   ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                   GATEWAY LAYER (Python)                            │
-│  ┌───────────────────────────────────────────────────────────────┐ │
-│  │  Multi-Threaded TCP Server (127.0.0.1:8080)                   │ │
-│  ├───────────────────────────────────────────────────────────────┤ │
-│  │  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐         │ │
-│  │  │ Thread 1    │  │ Thread 2     │  │ Thread 3     │         │ │
-│  │  │ Handle      │  │ Handle       │  │ Handle       │         │ │
-│  │  │ Sensor A    │  │ Sensor B     │  │ Sensor C     │         │ │
-│  │  └─────────────┘  └──────────────┘  └──────────────┘         │ │
-│  ├───────────────────────────────────────────────────────────────┤ │
-│  │  Binary Parser | Checksum Validator | Circular Buffer        │ │
-│  ├───────────────────────────────────────────────────────────────┤ │
-│  │  Analytics Engine (Mean, StdDev, Count) - Every 60s          │ │
-│  └───────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-          │
-          ▼
-    ┌──────────────┐
-    │   Console    │
-    │   Output     │
-    └──────────────┘
-```
-
----
-
-## 🔄 Execution Flow
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  START: User runs ./temp_sensor TEMP_A Zone_A 22.0 5           │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  main.c::main()                                                 │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │ • Print application header                                │ │
-│  │ • Call run_sensor(argc, argv)                             │ │
-│  └────────────────────┬──────────────────────────────────────┘ │
-└────────────────────────┼────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  sensor_logic.c::run_sensor()   [ORCHESTRATOR]                  │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │  STEP 1: Configuration                                    │ │
-│  │  ├─→ config.c::parse_configuration()                      │ │
-│  │  │    ├─→ validate_arguments()                            │ │
-│  │  │    └─→ print_configuration()                           │ │
-│  │  │                                                         │ │
-│  │  STEP 2: Network Setup                                    │ │
-│  │  ├─→ network.c::initialize_network()                      │ │
-│  │  │    ├─→ create_tcp_socket()                             │ │
-│  │  │    └─→ connect_to_server()                             │ │
-│  │  │                                                         │ │
-│  │  STEP 3: Sensor Operation                                 │ │
-│  │  ├─→ sensor.c::execute_sensor_loop()                      │ │
-│  │  │    │                                                    │ │
-│  │  │    └─→ [INFINITE LOOP]                                 │ │
-│  │  │         ├─→ generate_temperature_reading()             │ │
-│  │  │         ├─→ protocol.c::pack_packet()                  │ │
-│  │  │         ├─→ network.c::send_packet_to_gateway()        │ │
-│  │  │         ├─→ sleep(sampling_rate)                       │ │
-│  │  │         └─→ REPEAT                                     │ │
-│  │  │                                                         │ │
-│  │  STEP 4: Cleanup                                          │ │
-│  │  └─→ network.c::cleanup_network()                         │ │
-│  └───────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  END: Program exits cleanly                                     │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📦 Data Flow (Per Packet - Every 5 Seconds)
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  SENSOR SIDE (C)                                                        │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  1. Generate Temperature                                                │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ base_temp + daily_variation + noise                │             │
-│     │ 22.0°C + sin(time)*3.0 + random(-0.5 to +0.5)      │             │
-│     │ Result: 22.16°C                                     │             │
-│     └────────────────────┬───────────────────────────────┘             │
-│                          │                                              │
-│  2. Pack into Binary     ▼                                              │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ Packet Structure (20 bytes):                       │             │
-│     │ ┌──────────┬──────────┬────────┬──────┬─────────┐ │             │
-│     │ │device_id │timestamp │ value  │ type │checksum │ │             │
-│     │ │  8 bytes │ 4 bytes  │4 bytes │1 byte│ 1 byte  │ │             │
-│     │ └──────────┴──────────┴────────┴──────┴─────────┘ │             │
-│     │ "TEMP_A"   1771954275  22.16     0       156      │             │
-│     └────────────────────┬───────────────────────────────┘             │
-│                          │                                              │
-│  3. Calculate Checksum   ▼                                              │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ Sum bytes 0-16: 84+69+77+80+...+0 = 39012          │             │
-│     │ Modulo 256: 39012 % 256 = 156                      │             │
-│     │ Store at byte 17: checksum = 156                   │             │
-│     └────────────────────┬───────────────────────────────┘             │
-│                          │                                              │
-│  4. Transmit via TCP     ▼                                              │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ send(socket_fd, &packet, 20, 0)                    │             │
-│     │ 20 bytes transmitted over TCP socket               │             │
-│     └────────────────────┬───────────────────────────────┘             │
-│                          │                                              │
-└──────────────────────────┼──────────────────────────────────────────────┘
-                           │
-                           │ ═══════════════════════════════
-                           │      NETWORK (TCP/IP)
-                           │    127.0.0.1:8080
-                           │ ═══════════════════════════════
-                           │
+│  Multi-Threaded TCP Server → Binary Parser → DB Writer              │
+│  Analytics Engine (mean/stddev/min/max every 60s)                  │
+│  HVAC Orchestration (threshold-based, direct DB writes on AWS)     │
+│  Transports: TCP + MQTT + UART (named pipes)                       │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ PostgreSQL (psycopg2)
                            ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  GATEWAY SIDE (Python)                                                  │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  5. Receive Binary Data                                                 │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ data = client_socket.recv(20)                      │             │
-│     │ Received 20 bytes                                  │             │
-│     └────────────────────┬───────────────────────────────┘             │
-│                          │                                              │
-│  6. Validate Checksum    ▼                                              │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ calculated = sum(bytes[0:17]) % 256 = 156          │             │
-│     │ received = bytes[17] = 156                         │             │
-│     │ 156 == 156? ✓ VALID                                │             │
-│     └────────────────────┬───────────────────────────────┘             │
-│                          │                                              │
-│  7. Parse Binary         ▼                                              │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ struct.unpack('8sIfBB2x', data)                    │             │
-│     │ Extracts:                                          │             │
-│     │   device_id: "TEMP_A"                              │             │
-│     │   timestamp: 1771954275                            │             │
-│     │   value: 22.16                                     │             │
-│     │   type: 0 (TEMP)                                   │             │
-│     └────────────────────┬───────────────────────────────┘             │
-│                          │                                              │
-│  8. Store & Display      ▼                                              │
-│     ┌────────────────────────────────────────────────────┐             │
-│     │ buffer.add(packet)                                 │             │
-│     │ print("✓ Received TEMP: TEMP_A = 22.16")          │             │
-│     └────────────────────────────────────────────────────┘             │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                   DATABASE LAYER (PostgreSQL)                       │
+│  10 tables: zones, devices, temperature_readings,                  │
+│  occupancy_readings, hvac_state, power_readings,                   │
+│  analytics_snapshots, orchestration_events, schedules,             │
+│  ml_predictions — UUID PKs, TIMESTAMPTZ, 90-day retention          │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ JPA/Hibernate
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   BACKEND LAYER (Java Spring Boot)                  │
+│  REST API: 7 controllers, JWT auth, WebSocket live data            │
+│  Swagger/OpenAPI documentation                                     │
+│  Port: 8081                                                        │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ Axios HTTP + STOMP WebSocket
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   FRONTEND LAYER (React + Vite)                    │
+│  Dashboard, Zone Overview, Charts, Analytics, Schedules            │
+│  Real-time updates every 5 seconds                                 │
+│  Recharts for data visualization                                   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📊 Binary Packet Format (20 Bytes)
-```
- Byte:  0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16   17   18   19
-       ┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
-Field: │         Device ID (8 bytes)        │  Timestamp  │    Value    │ T  │ C  │  Padding  │
-       │                                    │  (4 bytes)  │  (4 bytes)  │ y  │ h  │ (2 bytes) │
-       │                                    │             │   (float)   │ p  │ k  │           │
-       │                                    │  (uint32)   │             │ e  │ s  │           │
-       └────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
-Example: "T" "E" "M" "P" "_" "A" \0  \0   [timestamp]    [22.16]       0   156   0    0
+## ☁️ AWS Cloud Architecture
 
-Where:
-  - Device ID: 8-character identifier (null-terminated string)
-  - Timestamp: Unix epoch (seconds since 1970)
-  - Value: Float (temperature in °C, power in kW, or control %)
-  - Type: 0=TEMP, 1=POWER, 2=CONTROL
-  - Checksum: (sum of bytes 0-16) % 256
-  - Padding: 2 bytes for memory alignment
-```
-
----
-
-## 🔀 Module Interaction Diagram
-```
-┌──────────────┐
-│   main.c     │  Entry Point
-│  (12 lines)  │  └─ Calls run_sensor()
-└──────┬───────┘
-       │
-       ▼
-┌─────────────────────┐
-│  sensor_logic.c     │  Orchestrator
-│    (35 lines)       │  └─ Coordinates all modules
-└──────┬──────────────┘
-       │
-       ├──────────────────┐
-       │                  │
-       ▼                  ▼
-┌────────────┐     ┌──────────────┐
-│  config.c  │     │  network.c   │
-│ (45 lines) │     │  (75 lines)  │
-│            │     │              │
-│ Parse args │     │ TCP sockets  │
-│ Validate   │     │ Connect      │
-│ Display    │     │ Send data    │
-└────────────┘     └──────┬───────┘
-       │                  │
-       │                  │
-       ├──────────────────┴──────────────┐
-       │                                 │
-       ▼                                 ▼
-┌────────────┐                    ┌──────────────┐
-│  sensor.c  │                    │  protocol.c  │
-│ (50 lines) │                    │  (35 lines)  │
-│            │                    │              │
-│ Generate   │───── uses ────────▶│ Pack packet  │
-│ temp data  │                    │ Calculate    │
-│ Main loop  │                    │ checksum     │
-└────────────┘                    └──────────────┘
-
-Total: 11 files, ~350 lines of clean, modular code
-Each file has ONE clear responsibility
-```
-
----
-
-## 🛠️ Technical Stack
-```
-╔════════════════════════════════════════════════════════════════╗
-║                    EMBEDDED LAYER (C)                          ║
-╠════════════════════════════════════════════════════════════════╣
-║  Language:        C (C11 standard)                             ║
-║  Networking:      POSIX sockets (TCP/IP)                       ║
-║  Architecture:    Modular (11 source files)                    ║
-║  Build System:    Make                                         ║
-║  Protocol:        Custom binary (20-byte packets)              ║
-║  Error Detection: Checksum validation (modulo 256)             ║
-║  Data Generation: Mathematical simulation (sine wave + noise)  ║
-╚════════════════════════════════════════════════════════════════╝
-
-╔════════════════════════════════════════════════════════════════╗
-║                    GATEWAY LAYER (Python)                      ║
-╠════════════════════════════════════════════════════════════════╣
-║  Language:        Python 3.7+                                  ║
-║  Networking:      socket module (TCP server)                   ║
-║  Concurrency:     threading module                             ║
-║  Binary Parsing:  struct module                                ║
-║  Data Structure:  collections.deque (circular buffer)          ║
-║  Analytics:       Real-time statistics (mean, stddev)          ║
-╚════════════════════════════════════════════════════════════════╝
-```
-
----
-
-## 📁 Project Structure
-```
-embedded-energy-monitoring-system/
-│
-├── 📄 README.md                    # This file
-├── 📄 config.txt                   # System configuration
-├── 📄 .gitignore                   # Git ignore rules
-│
-├── 📁 Embedded/                    # C Programs (Sensor Layer)
-│   ├── 📄 main.c                   # Entry point (12 lines)
-│   ├── 📄 sensor_logic.c           # Orchestrator (35 lines)
-│   ├── 📄 sensor_logic.h           # Orchestrator interface
-│   ├── 📄 config.c                 # Configuration handling (45 lines)
-│   ├── 📄 config.h                 # Configuration interface
-│   ├── 📄 network.c                # TCP socket operations (75 lines)
-│   ├── 📄 network.h                # Network interface
-│   ├── 📄 sensor.c                 # Temperature generation (50 lines)
-│   ├── 📄 sensor.h                 # Sensor interface
-│   ├── 📄 protocol.c               # Binary protocol (35 lines)
-│   ├── 📄 protocol.h               # Protocol interface
-│   └── 📄 Makefile                 # Build system
-│
-├── 📁 Gateway/                     # Python Programs (Aggregation Layer)
-│   └── 📄 gateway.py               # Multi-threaded TCP server (130 lines)
-│
-├── 📁 Backend/                     # (Future: Java Spring Boot)
-└── 📁 Database/                    # (Future: PostgreSQL)
-```
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-```bash
-# Linux/WSL
-gcc --version    # GCC 7.0+
-python3 --version # Python 3.7+
-make --version    # GNU Make 4.0+
-```
-
-### Build
-```bash
-cd Embedded
-make
-```
-
-**Output:**
-```
-Compiling main.c...
-Compiling sensor_logic.c...
-Compiling config.c...
-Compiling network.c...
-Compiling sensor.c...
-Compiling protocol.c...
-Linking...
-✓ Build successful: temp_sensor
-```
-
-### Run
-
-**Terminal 1: Start Gateway**
-```bash
-cd Gateway
-python3 gateway.py
-```
-
-**Terminal 2: Run Temperature Sensor**
-```bash
-cd Embedded
-./temp_sensor TEMP_A Zone_A 22.0 5
-```
-
-**Run Multiple Sensors (Terminal 3, 4, 5...):**
-```bash
-./temp_sensor TEMP_B Zone_B 21.0 3
-./temp_sensor TEMP_C Basement 10.0 10
-./temp_sensor TEMP_D Rooftop 35.0 15
-```
-
----
-
-## ✨ Features
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  ✅ Custom Binary Protocol                              │
-│     • 20-byte efficient packet format                   │
-│     • Network bandwidth optimized                       │
+│                        GITHUB                           │
+│  git push → GitHub Actions CI/CD Pipeline               │
+│    ├── Build + test backend (Maven/JUnit)               │
+│    ├── Build + test frontend (Vite/Vitest)              │
+│    ├── Build + test gateway (pytest)                    │
+│    ├── Push Docker images → ECR                         │
+│    ├── Deploy ECS services (force-new-deployment)       │
+│    └── Build React → sync to S3                        │
+└─────────────────┬───────────────────────────────────────┘
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│              AWS (Terraform managed)                    │
 │                                                         │
-│  ✅ Checksum Validation                                 │
-│     • Modulo-256 error detection                        │
-│     • 100% packet integrity verification                │
+│  VPC (vpc-076cfa94d6c54c2ee)                           │
+│  ├── Public Subnet                                      │
+│  │     └── ALB → /api/* → ECS backend                 │
+│  │                                                      │
+│  ├── Private Subnet                                     │
+│  │     ├── ECS Fargate Cluster                         │
+│  │     │     ├── energy-management-backend  (Spring)   │
+│  │     │     ├── energy-management-gateway  (Python)   │
+│  │     │     ├── energy-management-sensor   (C binary) │
+│  │     │     └── energy-management-power    (C binary) │
+│  │     │                                               │
+│  │     └── RDS PostgreSQL (db.t3.micro)               │
+│  │                                                      │
+│  └── S3                                                │
+│        └── React frontend (static website hosting)     │
 │                                                         │
-│  ✅ Multi-Sensor Support                                │
-│     • Gateway handles 5+ concurrent connections         │
-│     • Each sensor runs as independent process           │
-│                                                         │
-│  ✅ Real-Time Analytics                                 │
-│     • Statistics calculated every 60 seconds            │
-│     • Mean, standard deviation, sample count            │
-│                                                         │
-│  ✅ Modular Architecture                                │
-│     • 11 source files with clean separation             │
-│     • Single responsibility per module                  │
-│     • Easy to maintain and extend                       │
-│                                                         │
-│  ✅ Professional Build System                           │
-│     • Makefile with dependency tracking                 │
-│     • Incremental compilation                           │
-│     • Clean/rebuild commands                            │
+│  ECR — 5 Docker image repositories                     │
+│  CloudWatch — structured logs for all 5 services       │
+│  Secrets Manager — DB credentials + JWT secret         │
+│  Service Discovery — gateway.energy.local DNS          │
+│  IAM — least-privilege task roles                      │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📺 Sample Output
+## 🛠️ Technology Stack
 
-### Sensor Output
+### Embedded Layer (C)
+- Language: C11 standard
+- Networking: POSIX sockets (TCP/IP)
+- Protocols: Custom binary V1 (20-byte) and V2 (32-byte) packets
+- IPC: POSIX shared memory + named semaphores
+- Hardware-ready: DHT22 temperature, VL53L1X occupancy, INA219 power
+- Transports: TCP, MQTT (Mosquitto), UART (named pipes simulation)
+
+### Gateway Layer (Python)
+- Multi-threaded TCP server
+- Binary packet parser (V1/V2 auto-detection)
+- PostgreSQL writer (psycopg2)
+- MQTT subscriber (paho-mqtt)
+- Analytics engine (60-second statistical snapshots)
+- HVAC orchestration (direct DB writes on AWS)
+
+### Database (PostgreSQL)
+- 10-table normalized schema
+- UUID primary keys
+- TIMESTAMPTZ for all timestamps
+- 90-day automatic data retention
+
+### Backend (Java Spring Boot)
+- Spring Boot 3.x, Java 17
+- JPA/Hibernate ORM
+- JWT authentication (HS512)
+- WebSocket for live data push
+- Swagger/OpenAPI documentation
+- 7 REST controllers, 7 services, 7 repositories
+
+### Frontend (React + Vite)
+- React 18, Vite build tool
+- Tailwind CSS dark theme
+- React Router for navigation
+- Axios for REST API calls
+- Recharts for data visualization
+- STOMP/SockJS for WebSocket
+
+### Infrastructure (AWS + Terraform)
+- ECS Fargate (5 services)
+- RDS PostgreSQL (db.t3.micro)
+- ALB (Application Load Balancer)
+- ECR (5 image repositories)
+- S3 (frontend static hosting)
+- CloudWatch Logs
+- Secrets Manager
+- Route 53 Service Discovery
+- GitHub Actions CI/CD
+
+---
+
+## 📁 Project Structure
+
 ```
-╔════════════════════════════════════════╗
-║   Temperature Sensor Application      ║
-╚════════════════════════════════════════╝
-
-[ORCHESTRATOR] Starting sensor initialization...
-
-─── Step 1: Configuration ───
-[CONFIG] Device ID:     TEMP_A
-[CONFIG] Zone:          Zone_A
-[CONFIG] Base Temp:     22.0°C
-[CONFIG] Sampling Rate: 5 seconds
-[CONFIG] ✓ Configuration loaded
-
-─── Step 2: Network Setup ───
-[NETWORK] ✓ Socket created (fd=3)
-[NETWORK] Connecting to 127.0.0.1:8080...
-[NETWORK] ✓ Connected to gateway
-
-─── Step 3: Sensor Operation ───
-[SENSOR] Starting measurement loop...
-         Press Ctrl+C to stop
-─────────────────────────────────────────────
-[SENSOR] #1    | 22.16°C | Zone_A | +0s
-[SENSOR] #2    | 21.81°C | Zone_A | +5s
-[SENSOR] #3    | 22.18°C | Zone_A | +10s
-[SENSOR] #4    | 21.61°C | Zone_A | +15s
-```
-
-### Gateway Output
-```
-[INFO] Packet format: 8sIfBB2x
-[INFO] Packet size: 20 bytes
-[GATEWAY] Listening on 127.0.0.1:8080
-[GATEWAY] Client connected: ('127.0.0.1', 54321)
-[GATEWAY] ✓ Received TEMP: TEMP_A = 22.16
-[GATEWAY] ✓ Received TEMP: TEMP_A = 21.81
-[GATEWAY] ✓ Received TEMP: TEMP_A = 22.18
-[ANALYTICS] Mean=21.95, StdDev=0.23, Count=12
+Energy Management System/
+│
+├── 📁 Embedded/                    # C Programs (Sensor Layer)
+│   ├── main.c                      # Temperature sensor entry point
+│   ├── sensor_logic.c              # Sensor orchestration
+│   ├── sensor.c / sensor.h         # Temperature generation
+│   ├── hvac_controller.c           # PID-based HVAC control
+│   ├── power_meter.c               # Power consumption monitoring
+│   ├── occupancy_sensor.c          # People counting (ToF sensor)
+│   ├── protocol.c / protocol.h     # Binary packet V1 + V2
+│   ├── network.c / network.h       # TCP socket operations
+│   ├── pid.c / pid.h               # PID controller
+│   ├── ipc.c / ipc.h               # POSIX shared memory IPC
+│   ├── mqtt_client.c / .h          # MQTT publish
+│   ├── uart_sim.c / .h             # UART simulation (named pipes)
+│   ├── config.c / config.h         # Argument parsing
+│   └── Dockerfile                  # Multi-stage GCC build
+│
+├── 📁 Gateway/                     # Python Programs (Aggregation)
+│   ├── main.py                     # Entry point
+│   ├── gateway_server.py           # Orchestration
+│   ├── network.py                  # TCP server + client handler
+│   ├── protocol.py                 # Binary parser V1/V2
+│   ├── db_writer.py                # PostgreSQL writer
+│   ├── analytics.py                # Statistical engine
+│   ├── process_manager.py          # Process lifecycle
+│   ├── orchestration_config.py     # HVAC thresholds
+│   ├── mqtt_subscriber.py          # MQTT subscriber
+│   ├── uart_reader.py              # UART reader
+│   └── Dockerfile
+│
+├── 📁 Backend/                     # Java Spring Boot REST API
+│   └── src/main/java/com/energy/
+│       ├── controller/             # 7 REST controllers
+│       ├── service/                # 7 business logic services
+│       ├── repository/             # 7 JPA repositories
+│       ├── model/                  # 7 JPA entity models
+│       ├── dto/                    # 7 response DTOs
+│       ├── security/               # JWT auth (JwtUtil, JwtFilter)
+│       └── config/                 # CORS, Swagger, WebSocket config
+│
+├── 📁 Frontend/                    # React + Vite Dashboard
+│   └── src/
+│       ├── pages/                  # Dashboard, ZoneOverview, Charts,
+│       │                           # Analytics, Schedules, Login
+│       ├── components/             # Layout, Sidebar, StatCard, SparkLine
+│       ├── api/                    # axios, auth, temperature, power,
+│       │                           # hvac, occupancy, zones, analytics
+│       └── context/                # AuthContext (JWT)
+│
+├── 📁 Database/
+│   └── schema.sql                  # 10-table PostgreSQL schema
+│
+├── 📁 Terraform/                   # AWS Infrastructure as Code
+│   ├── vpc.tf                      # VPC, subnets, IGW, NAT
+│   ├── ecs.tf                      # ECS cluster, services, task defs
+│   ├── rds.tf                      # PostgreSQL RDS instance
+│   ├── alb.tf                      # Application Load Balancer
+│   ├── ecr.tf                      # ECR repositories
+│   ├── s3.tf                       # Frontend + snapshots buckets
+│   ├── iam.tf                      # Task roles and policies
+│   ├── secrets.tf                  # Secrets Manager
+│   └── service_discovery.tf        # Route 53 private DNS
+│
+├── 📁 .github/workflows/
+│   └── deploy.yml                  # GitHub Actions CI/CD pipeline
+│
+├── docker-compose.yml              # Local 7-container stack
+├── start_system.sh                 # Local startup script
+└── README.md                       # This file
 ```
 
 ---
 
-## 🧠 Technical Highlights
+## ✨ Features
 
-### Embedded Systems Programming
-- ✅ **Modular C architecture** - 11 files with clear separation of concerns
-- ✅ **Struct packing** - Understanding memory alignment and padding
-- ✅ **Binary protocols** - Efficient data serialization
-- ✅ **POSIX sockets** - Low-level network programming in C
-
-### Distributed Systems
-- ✅ **Client-server model** - TCP-based architecture
-- ✅ **Multi-threading** - Concurrent connection handling
-- ✅ **Data aggregation** - Central gateway pattern
-- ✅ **Real-time processing** - Streaming data analysis
-
-### Software Engineering
-- ✅ **Clean code principles** - Single responsibility, DRY
-- ✅ **Modular design** - Each file serves one purpose
-- ✅ **Error handling** - Comprehensive validation
-- ✅ **Professional build system** - Makefile with proper dependencies
+- **Custom Binary Protocol** — 20-byte V1 (single value) and 32-byte V2 (4 float fields) packets with checksum validation
+- **Multi-Transport** — TCP, MQTT, and UART running in parallel simultaneously
+- **PID Temperature Control** — Ziegler-Nichols tuned HVAC controller with anti-windup
+- **IPC Synchronization** — POSIX shared memory between HVAC and power meter processes
+- **Real-Time Analytics** — mean, stddev, min, max calculated per sensor type every 60 seconds
+- **Autonomous HVAC Orchestration** — triggers heating/cooling based on configurable temperature thresholds
+- **JWT Authentication** — HS512 signed tokens with 24-hour expiry
+- **Live Dashboard** — real-time updates every 5 seconds via polling
+- **Historical Charts** — 1h/6h/24h/48h views for temperature, power, and HVAC activity
+- **AWS Production Deployment** — fully containerized on ECS Fargate with RDS, ALB, S3
+- **Infrastructure as Code** — entire AWS stack managed by Terraform
+- **CI/CD Pipeline** — automated build, test, and deploy on every git push
 
 ---
 
-## 🎓 Skills Demonstrated
+## 📦 Binary Packet Format
+
+### V1 Packet (20 bytes) — Temperature, Occupancy, Power
 ```
-┌──────────────────────────────────────────────────────┐
-│  EMBEDDED SYSTEMS                                    │
-│  • C programming (C11 standard)                      │
-│  • Memory management and struct packing              │
-│  • POSIX system calls                                │
-│  • Binary data manipulation                          │
-└──────────────────────────────────────────────────────┘
+Byte:  0-7        8-11        12-15      16      17        18-19
+       ┌──────────┬───────────┬──────────┬───────┬─────────┬─────────┐
+       │device_id │ timestamp │  value   │ type  │checksum │ padding │
+       │ 8 bytes  │ uint32    │  float   │ uint8 │  uint8  │ 2 bytes │
+       └──────────┴───────────┴──────────┴───────┴─────────┴─────────┘
+Checksum = sum(bytes[0:17]) % 256
+```
 
-┌──────────────────────────────────────────────────────┐
-│  NETWORKING                                          │
-│  • TCP/IP socket programming (C and Python)          │
-│  • Client-server architecture                        │
-│  • Protocol design and implementation                │
-│  • Multi-threaded servers                            │
-└──────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────┐
-│  SOFTWARE ARCHITECTURE                               │
-│  • Modular design patterns                           │
-│  • Separation of concerns                            │
-│  • Clean code principles                             │
-│  • Build systems (Makefile)                          │
-└──────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────┐
-│  DATA PROCESSING                                     │
-│  • Binary parsing (struct module)                    │
-│  • Checksum algorithms                               │
-│  • Statistical analysis                              │
-│  • Circular buffer implementation                    │
-└──────────────────────────────────────────────────────┘
+### V2 Packet (32 bytes) — HVAC State
+```
+Byte:  0-7        8-11        12      13        14-15      16-19   20-23   24-27   28-31
+       ┌──────────┬───────────┬───────┬─────────┬──────────┬───────┬───────┬───────┬───────┐
+       │device_id │ timestamp │ type  │ version │ padding  │value1 │value2 │value3 │value4 │
+       │ 8 bytes  │ uint32    │ uint8 │  = 2    │ 2 bytes  │ float │ float │ float │ float │
+       └──────────┴───────────┴───────┴─────────┴──────────┴───────┴───────┴───────┴───────┘
+V2 HVAC fields: value1=heater_pct, value2=cooler_pct, value3=current_temp, value4=setpoint
 ```
 
 ---
 
-## 🔮 Roadmap & Future Enhancements
-```
-Phase 1: Core System ✅ COMPLETE
-├─ Binary protocol with checksum validation
-├─ Multi-file modular architecture
-├─ TCP socket communication
-└─ Real-time data streaming
+## 🚀 Quick Start — Local
 
-Phase 2: Control Systems (In Progress)
-├─ [ ] HVAC controller with PID algorithm
-├─ [ ] Power meter for energy tracking
-├─ [ ] Closed-loop temperature control
-└─ [ ] Multi-zone management
-
-Phase 3: Persistence & Backend
-├─ [ ] PostgreSQL database integration
-├─ [ ] Java Spring Boot REST API
-├─ [ ] Historical data queries
-└─ [ ] RESTful endpoints
-
-Phase 4: Visualization
-├─ [ ] Real-time web dashboard
-├─ [ ] Chart.js temperature graphs
-├─ [ ] WebSocket live updates
-└─ [ ] Mobile-responsive UI
-
-Phase 5: Cloud Deployment
-├─ [ ] AWS EC2 deployment
-├─ [ ] RDS for database
-├─ [ ] Terraform IaC
-└─ [ ] CI/CD pipeline (GitHub Actions)
-```
-
----
-
-## 🎯 Use Cases
-
-This system simulates:
-
-1. **Smart Office Building**
-   - Monitor temperature across 50+ rooms
-   - Optimize HVAC energy usage
-   - Detect equipment failures early
-
-2. **University Campus**
-   - Track energy consumption per building
-   - Predictive maintenance for AC units
-   - Automated climate control
-
-3. **Data Center**
-   - Critical temperature monitoring
-   - Real-time alerts for overheating
-   - Power usage tracking
-
----
-
-## 🧪 Testing
-
-### Unit Testing
+### Prerequisites
 ```bash
-# Test individual components
-gcc -o test_protocol test_protocol.c protocol.c
-./test_protocol
+gcc --version      # GCC 7.0+
+python3 --version  # Python 3.7+
+java --version     # Java 17+
+node --version     # Node 20+
+docker --version   # Docker 20+
 ```
 
-### Integration Testing
+### Run Full Stack
 ```bash
-# Run full system
-./test_full_system.sh
+# Terminal 1: Start everything
+./start_system.sh
+
+# Or manually:
+cd Gateway && python3 main.py &
+cd Embedded && make all && ./temp_sensor TEMP_A Zone_A 22.0 5 &
+cd Backend && mvn clean package -DskipTests && java -jar target/*.jar &
+cd Frontend && npm install && npm run dev
 ```
 
-### Load Testing
+### Run with Docker Compose
 ```bash
-# Simulate 10 concurrent sensors
-for i in {1..10}; do
-    ./temp_sensor SENSOR_$i Zone_$i 20.0 5 &
-done
+docker compose up --build
 ```
+
+Open `http://localhost:5173` — login with `admin` / `energy123`.
+
+---
+
+## ☁️ Quick Start — AWS
+
+### Prerequisites
+```bash
+aws configure          # Set AWS credentials
+terraform --version    # Terraform 1.0+
+```
+
+### Deploy
+```bash
+cd Terraform
+terraform init
+terraform apply -auto-approve
+```
+
+### Destroy (saves costs)
+```bash
+terraform destroy -auto-approve
+```
+
+**Running cost:** ~$0.04/hour (~$1/day). Destroy when not demoing.
+
+---
+
+## 🔄 CI/CD Pipeline
+
+Every push to `main` triggers:
+
+```
+Push to main
+    │
+    ├── test-backend    → mvn test → upload JUnit results
+    ├── test-frontend   → npm test (Vitest)
+    └── test-gateway    → pytest
+          │
+          ├── deploy-backend   → build JAR → build Docker → push ECR → ECS update
+          ├── deploy-frontend  → npm build (with VITE_API_URL) → S3 sync
+          ├── deploy-gateway   → build Docker → push ECR → ECS update
+          └── deploy-embedded  → build Docker → push ECR → ECS update (sensor + power)
+```
+
+### Required GitHub Secrets
+| Secret | Description |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | IAM user access key |
+| `AWS_SECRET_ACCESS_KEY` | IAM user secret key |
+
+---
+
+## 📡 API Reference
+
+All endpoints require `Authorization: Bearer <token>` header.
+
+### Authentication
+```
+POST /api/auth/login
+Body: {"username": "admin", "password": "energy123"}
+Returns: {"token": "eyJ...", "expiresIn": 86400000}
+```
+
+### Temperature
+```
+GET /api/temperature/{zone}/latest
+GET /api/temperature/{zone}/recent?hours=1
+GET /api/temperature/{zone}/history?hours=24
+```
+
+### Power
+```
+GET /api/power/{zone}/latest
+GET /api/power/{zone}/recent?hours=1
+GET /api/power/{zone}/sparkline
+```
+
+### HVAC
+```
+GET /api/hvac/{zone}/latest
+GET /api/hvac/{zone}/recent?hours=1
+GET /api/hvac/{zone}/mode
+```
+
+### Zones
+```
+GET /api/zones
+GET /api/zones/{id}
+```
+
+### Analytics
+```
+GET /api/analytics/{zone}/latest?metricType=TEMP
+```
+
+---
+
+## 🐛 Known Issues & Resolutions
+
+A full record of 25 technical issues encountered during development is documented in `docs/issues-report.md`. Key highlights:
+
+| Issue | Root Cause | Resolution |
+|---|---|---|
+| Spring Boot 403 persistent | Docker cached old JAR silently | Build JAR locally, copy into image |
+| Sensor DNS failure on AWS | Route53 zone associated with wrong VPC | `aws route53 associate-vpc-with-hosted-zone` |
+| Power checksum failures | Float byte `0x02` falsely detected as V2 packet | Validate type byte alongside version byte |
+| HVAC subprocess fails in ECS | Fargate containers are isolated — no subprocess spawning | Write HVAC state directly to DB |
+| Backend health check timeout | Spring Boot needs 48s to start, startPeriod was 60s | Increased startPeriod to 120s |
+| Login error on S3 frontend | VITE_API_URL missing `/api` suffix | Set correct URL with `/api` at build time |
 
 ---
 
 ## 📊 Performance Metrics
-```
-┌─────────────────────────────────────────────────────┐
-│  Metric                    │  Value                 │
-├────────────────────────────┼────────────────────────┤
-│  Packet Size               │  20 bytes              │
-│  Checksum Validation Rate  │  100% (zero errors)    │
-│  Max Concurrent Sensors    │  5+ tested, 100+ capable│
-│  Packet Transmission Rate  │  Configurable (1-60s)  │
-│  Gateway Latency           │  < 1ms per packet      │
-│  Data Integrity            │  100% (checksum)       │
-│  Memory Efficiency         │  Circular buffer (1000)│
-└────────────────────────────┴────────────────────────┘
-```
+
+| Metric | Value |
+|---|---|
+| Packet size (V1) | 20 bytes |
+| Packet size (V2) | 32 bytes |
+| Sensor sampling rate | Configurable (1–60s) |
+| Analytics interval | 60 seconds |
+| Dashboard refresh | 5 seconds |
+| JWT expiry | 24 hours |
+| Max concurrent sensors | 100+ (thread-per-client) |
+| AWS uptime | ECS auto-restarts on failure |
 
 ---
 
-## 🤝 Contributing
+## 🎓 Skills Demonstrated
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
+**Embedded Systems:** C programming, POSIX sockets, binary protocol design, PID control, IPC shared memory, DHT22/VL53L1X/INA219 hardware interfaces
 
----
+**Networking:** TCP/IP socket programming, MQTT pub/sub, UART framing, binary packet parsing, checksum validation
 
-## 📝 License
+**Backend Engineering:** Spring Boot, JPA/Hibernate, JWT security, REST API design, WebSocket, Swagger/OpenAPI
 
-MIT License - See LICENSE file for details
+**Frontend Engineering:** React, Vite, Tailwind CSS, Recharts, real-time data polling, protected routes
+
+**Cloud & DevOps:** AWS ECS Fargate, RDS, ALB, ECR, S3, Secrets Manager, Service Discovery, CloudWatch, IAM, Terraform IaC, GitHub Actions CI/CD
+
+**Database:** PostgreSQL schema design, UUID PKs, TIMESTAMPTZ, JPA repositories, JPQL queries
 
 ---
 
 ## 👤 Author
 
-**Shashank Sakrappa Hakari**  
-Master of Science in Software Engineering Systems  
-Northeastern University (GPA: 3.89)
+**Shashank Sakrappa Hakari**
+Master of Science in Software Engineering Systems — Northeastern University (GPA: 3.89)
 
-**Professional Background:**
-- 2 years Embedded Software Engineer @ Ducom Aerospace
-- Specialized in ARM Cortex-M4 firmware development
-- Expertise in power management and control systems
+- 📧 sh.s@northeastern.edu
+- 💼 [linkedin.com/in/shashank-s-h-651970349](https://www.linkedin.com/in/shashank-s-h-651970349/)
+- 🐙 [github.com/shashanksh1109](https://github.com/shashanksh1109)
 
-**Connect:**
-- 📧 Email: sh.s@northeastern.edu
-- 💼 LinkedIn: [linkedin.com/in/shashank-s-h-651970349](https://www.linkedin.com/in/shashank-s-h-651970349/)
-- 🐙 GitHub: [github.com/shashanksh1109](https://github.com/shashanksh1109)
-
----
-
-## 🙏 Acknowledgments
-
-Built as part of IoT and Distributed Systems coursework at Northeastern University, demonstrating:
-- Embedded software engineering principles
-- Network protocol design
-- Real-time system architecture
-- Professional software development practices
+**Professional Background:** 2 years Embedded Software Engineer at Ducom Aerospace — ARM Cortex-M4 firmware, power management systems, real-time control.
 
 ---
 
 *⭐ If you find this project useful, please star the repository!*
 
----
-
-**Keywords:** `embedded-systems` `iot` `c-programming` `python` `tcp-sockets` `binary-protocol` `distributed-systems` `real-time-systems` `sensor-network` `energy-monitoring` `multi-threading` `embedded-c` `network-programming` `systems-programming` `clean-code` `modular-architecture`
+**Keywords:** `embedded-systems` `iot` `aws` `ecs-fargate` `terraform` `github-actions` `spring-boot` `react` `postgresql` `docker` `c-programming` `python` `tcp-sockets` `binary-protocol` `pid-controller` `real-time-systems` `energy-monitoring` `smart-building`
