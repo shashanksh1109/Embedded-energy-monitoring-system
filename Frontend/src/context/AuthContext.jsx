@@ -20,7 +20,13 @@ export function AuthProvider({ children }) {
       setUsername(data.username)
       return true
     } catch (err) {
-      setError('Invalid username or password')
+      if (err.response?.status === 401) {
+        setError('Invalid username or password')
+      } else if (err.response?.status >= 500 || !err.response) {
+        setError('Service unavailable — please try again in a moment')
+      } else {
+        setError('Login failed — please try again')
+      }
       return false
     } finally {
       setLoading(false)
