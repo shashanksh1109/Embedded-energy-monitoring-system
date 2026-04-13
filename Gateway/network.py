@@ -52,9 +52,11 @@ class ClientHandler:
                 # Check version byte at position 13 (V2 packets have version=2 there)
                 # V1 packets have checksum at byte 17 — byte 13 is part of the float value
                 # V2 packets explicitly set version=2 at byte 13
-                version = data[13] if len(data) > 13 else 1
+                pkt_type_byte = data[12] if len(data) > 12 else 0xFF
+                version_byte  = data[13] if len(data) > 13 else 0
+                version = version_byte
 
-                if version == 2:
+                if version == 2 and pkt_type_byte in (0, 1, 2, 3):
                     # Read remaining 12 bytes to complete the 32-byte V2 packet
                     rest = self._recv_exact(self.parser.get_v2_packet_size() - self.parser.get_packet_size())
                     if not rest:
@@ -102,97 +104,53 @@ class ClientHandler:
             print(f"[NETWORK] Client disconnected: {self.address}")
 
     def _check_temperature_and_trigger(self, packet):
-        """Analyze temperature and trigger HVAC if needed"""
+        """Analyze temperature and trigger HVAC if needed.
+        In ECS we cannot spawn subprocesses — write hvac_state and
+        orchestration_events directly to the DB instead.
+        """
         temp      = packet['value']
         device_id = packet['device_id']
+        zone_suffix = device_id.split('_')[1] if '_' in device_id else 'A'
+        hvac_device = f'HVAC_{zone_suffix}'
 
-        # Extract zone from device ID
-        if '_' in device_id:
-            zone = device_id.split('_')[1]
-        else:
-            zone = 'A'
+        if not self.db:
+            return
+        zone_id = self.db._get_zone_id(device_id)
+        if not zone_id:
+            return
 
-        # Temperature too low → start heating
         if self.orch_config.is_temperature_too_low(temp):
-            if not self.process_mgr.is_hvac_running():
-                print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT")
-                print(f"[ORCHESTRATOR]   Current: {temp:.1f}C")
-                print(f"[ORCHESTRATOR]   Threshold: {self.orch_config.temp_threshold_low}C")
-                print(f"[ORCHESTRATOR]   Status: Below threshold")
-                print(f"[ORCHESTRATOR]   Action: Starting HVAC (heating mode)")
+            print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT: {temp:.1f}C below {self.orch_config.temp_threshold_low}C → HEATING")
+            self.db.write_hvac_state_direct(
+                zone_id=zone_id, device_id=hvac_device,
+                heater_pct=80.0, cooler_pct=0.0,
+                current_temp=temp, setpoint=self.orch_config.temp_target
+            )
+            self.db.write_orchestration_event(
+                zone_id=zone_id, event_type='HVAC_HEATING',
+                description=f'Temp {temp:.1f}C below {self.orch_config.temp_threshold_low}C',
+                temperature=temp
+            )
 
-                self.process_mgr.spawn_hvac(
-                    f'HVAC_{zone}',
-                    f'Zone_{zone}',
-                    self.orch_config.temp_target
-                )
-
-                # Log orchestration event to DB
-                if self.db:
-                    zone_id = self.db._get_zone_id(device_id)
-                    if zone_id:
-                        self.db.write_orchestration_event(
-                            zone_id      = zone_id,
-                            event_type   = 'HVAC_STARTED',
-                            description  = f'Temperature {temp:.1f}C below threshold {self.orch_config.temp_threshold_low}C',
-                            temperature  = temp,
-                            hvac_pid     = self.process_mgr.hvac_process.pid if self.process_mgr.hvac_process else None
-                        )
-                print()
-
-        # Temperature too high → start cooling
         elif self.orch_config.is_temperature_too_high(temp):
-            if not self.process_mgr.is_hvac_running():
-                print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT")
-                print(f"[ORCHESTRATOR]   Current: {temp:.1f}C")
-                print(f"[ORCHESTRATOR]   Threshold: {self.orch_config.temp_threshold_high}C")
-                print(f"[ORCHESTRATOR]   Status: Above threshold")
-                print(f"[ORCHESTRATOR]   Action: Starting HVAC (cooling mode)")
+            print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT: {temp:.1f}C above {self.orch_config.temp_threshold_high}C → COOLING")
+            self.db.write_hvac_state_direct(
+                zone_id=zone_id, device_id=hvac_device,
+                heater_pct=0.0, cooler_pct=80.0,
+                current_temp=temp, setpoint=self.orch_config.temp_target
+            )
+            self.db.write_orchestration_event(
+                zone_id=zone_id, event_type='HVAC_COOLING',
+                description=f'Temp {temp:.1f}C above {self.orch_config.temp_threshold_high}C',
+                temperature=temp
+            )
 
-                self.process_mgr.spawn_hvac(
-                    f'HVAC_{zone}',
-                    f'Zone_{zone}',
-                    self.orch_config.temp_target
-                )
-
-                # Log orchestration event to DB
-                if self.db:
-                    zone_id = self.db._get_zone_id(device_id)
-                    if zone_id:
-                        self.db.write_orchestration_event(
-                            zone_id     = zone_id,
-                            event_type  = 'HVAC_STARTED',
-                            description = f'Temperature {temp:.1f}C above threshold {self.orch_config.temp_threshold_high}C',
-                            temperature = temp,
-                            hvac_pid    = self.process_mgr.hvac_process.pid if self.process_mgr.hvac_process else None
-                        )
-                print()
-
-        # Temperature stable → stop HVAC if running long enough
         elif self.orch_config.is_temperature_stable(temp):
-            if self.process_mgr.is_hvac_running():
-                runtime = time.time() - self.process_mgr.hvac_start_time
-
-                if runtime > self.orch_config.stable_duration:
-                    print(f"\n[ORCHESTRATOR] TEMPERATURE STABLE")
-                    print(f"[ORCHESTRATOR]   Current: {temp:.1f}C")
-                    print(f"[ORCHESTRATOR]   Range: {self.orch_config.temp_threshold_low}-{self.orch_config.temp_threshold_high}C")
-                    print(f"[ORCHESTRATOR]   Stable duration: {runtime:.0f}s")
-                    print(f"[ORCHESTRATOR]   Action: Stopping HVAC")
-
-                    # Log stop event before killing process
-                    if self.db:
-                        zone_id = self.db._get_zone_id(device_id)
-                        if zone_id:
-                            self.db.write_orchestration_event(
-                                zone_id     = zone_id,
-                                event_type  = 'HVAC_STOPPED',
-                                description = f'Temperature stable at {temp:.1f}C for {runtime:.0f}s',
-                                temperature = temp
-                            )
-
-                    self.process_mgr.kill_hvac()
-                    print()
+            self.db.write_hvac_state_direct(
+                zone_id=zone_id, device_id=hvac_device,
+                heater_pct=0.0, cooler_pct=0.0,
+                current_temp=temp, setpoint=self.orch_config.temp_target
+            )
 
 
 class TCPServer:

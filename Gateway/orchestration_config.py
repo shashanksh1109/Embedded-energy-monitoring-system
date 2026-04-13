@@ -18,9 +18,9 @@ class OrchestrationConfig:
 
     def __init__(self, use_hardware=False):
         # Temperature thresholds
-        self.temp_threshold_low  = 18.0
-        self.temp_threshold_high = 24.0
-        self.temp_target         = 20.0
+        self.temp_threshold_low  = 21.5
+        self.temp_threshold_high = 22.0
+        self.temp_target         = 22.0
 
         # Timing parameters
         self.stable_duration    = 30

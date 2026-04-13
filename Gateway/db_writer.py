@@ -329,11 +329,26 @@ class DBWriter:
                 self.cursor.execute(
                     """
                     INSERT INTO orchestration_events
-                        (zone_id, event_type, description, temperature, hvac_pid)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (zone_id, event_type, trigger_value, action_taken)
+                    VALUES (%s, %s, %s, %s)
                     """,
-                    (zone_id, event_type, description, temperature, hvac_pid)
+                    (zone_id, event_type, temperature, description)
                 )
             print(f"[DB] Wrote event: {event_type} zone={zone_id}")
         except Exception as e:
             print(f"[DB] Event write error: {e}")
+    def write_hvac_state_direct(self, zone_id, device_id, heater_pct, cooler_pct, current_temp, setpoint):
+        """Write HVAC state directly (used when subprocess spawning is unavailable)."""
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO hvac_state
+                        (device_id, zone_id, heater_pct, cooler_pct, current_temp, setpoint)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (device_id, zone_id, heater_pct, cooler_pct, current_temp, setpoint))
+            self.conn.commit()
+            mode = 'HEATING' if heater_pct > 0 else ('COOLING' if cooler_pct > 0 else 'IDLE')
+            print(f"[DB] Wrote HVAC state: {device_id} = {mode} ({current_temp:.1f}C → {setpoint:.1f}C)")
+        except Exception as e:
+            print(f"[DB] HVAC state write error: {e}")
+
