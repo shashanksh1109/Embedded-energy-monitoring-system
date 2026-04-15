@@ -1,0 +1,270 @@
+Version 4.0 HI-TECH Software Intermediate Code
+"38 ./zones.h
+[s S99 `i 1 `i 1 `uc 1 ]
+[n S99 . temp occ mode ]
+"2753 /opt/microchip/xc8/v2.46/pic/include/proc/pic16f877a.h
+[v _RD0 `Vb ~T0 @X0 0 e@64 ]
+"2756
+[v _RD1 `Vb ~T0 @X0 0 e@65 ]
+"2759
+[v _RD2 `Vb ~T0 @X0 0 e@66 ]
+"2660
+[v _RA0 `Vb ~T0 @X0 0 e@40 ]
+"2663
+[v _RA1 `Vb ~T0 @X0 0 e@41 ]
+"2666
+[v _RA2 `Vb ~T0 @X0 0 e@42 ]
+"54 /opt/microchip/xc8/v2.46/pic/include/proc/pic16f877a.h
+[; <" INDF equ 00h ;# ">
+"61
+[; <" TMR0 equ 01h ;# ">
+"68
+[; <" PCL equ 02h ;# ">
+"75
+[; <" STATUS equ 03h ;# ">
+"161
+[; <" FSR equ 04h ;# ">
+"168
+[; <" PORTA equ 05h ;# ">
+"218
+[; <" PORTB equ 06h ;# ">
+"280
+[; <" PORTC equ 07h ;# ">
+"342
+[; <" PORTD equ 08h ;# ">
+"404
+[; <" PORTE equ 09h ;# ">
+"436
+[; <" PCLATH equ 0Ah ;# ">
+"456
+[; <" INTCON equ 0Bh ;# ">
+"534
+[; <" PIR1 equ 0Ch ;# ">
+"596
+[; <" PIR2 equ 0Dh ;# ">
+"636
+[; <" TMR1 equ 0Eh ;# ">
+"643
+[; <" TMR1L equ 0Eh ;# ">
+"650
+[; <" TMR1H equ 0Fh ;# ">
+"657
+[; <" T1CON equ 010h ;# ">
+"732
+[; <" TMR2 equ 011h ;# ">
+"739
+[; <" T2CON equ 012h ;# ">
+"810
+[; <" SSPBUF equ 013h ;# ">
+"817
+[; <" SSPCON equ 014h ;# ">
+"887
+[; <" CCPR1 equ 015h ;# ">
+"894
+[; <" CCPR1L equ 015h ;# ">
+"901
+[; <" CCPR1H equ 016h ;# ">
+"908
+[; <" CCP1CON equ 017h ;# ">
+"966
+[; <" RCSTA equ 018h ;# ">
+"1061
+[; <" TXREG equ 019h ;# ">
+"1068
+[; <" RCREG equ 01Ah ;# ">
+"1075
+[; <" CCPR2 equ 01Bh ;# ">
+"1082
+[; <" CCPR2L equ 01Bh ;# ">
+"1089
+[; <" CCPR2H equ 01Ch ;# ">
+"1096
+[; <" CCP2CON equ 01Dh ;# ">
+"1154
+[; <" ADRESH equ 01Eh ;# ">
+"1161
+[; <" ADCON0 equ 01Fh ;# ">
+"1257
+[; <" OPTION_REG equ 081h ;# ">
+"1327
+[; <" TRISA equ 085h ;# ">
+"1377
+[; <" TRISB equ 086h ;# ">
+"1439
+[; <" TRISC equ 087h ;# ">
+"1501
+[; <" TRISD equ 088h ;# ">
+"1563
+[; <" TRISE equ 089h ;# ">
+"1620
+[; <" PIE1 equ 08Ch ;# ">
+"1682
+[; <" PIE2 equ 08Dh ;# ">
+"1722
+[; <" PCON equ 08Eh ;# ">
+"1756
+[; <" SSPCON2 equ 091h ;# ">
+"1818
+[; <" PR2 equ 092h ;# ">
+"1825
+[; <" SSPADD equ 093h ;# ">
+"1832
+[; <" SSPSTAT equ 094h ;# ">
+"2001
+[; <" TXSTA equ 098h ;# ">
+"2082
+[; <" SPBRG equ 099h ;# ">
+"2089
+[; <" CMCON equ 09Ch ;# ">
+"2159
+[; <" CVRCON equ 09Dh ;# ">
+"2224
+[; <" ADRESL equ 09Eh ;# ">
+"2231
+[; <" ADCON1 equ 09Fh ;# ">
+"2290
+[; <" EEDATA equ 010Ch ;# ">
+"2297
+[; <" EEADR equ 010Dh ;# ">
+"2304
+[; <" EEDATH equ 010Eh ;# ">
+"2311
+[; <" EEADRH equ 010Fh ;# ">
+"2318
+[; <" EECON1 equ 018Ch ;# ">
+"2363
+[; <" EECON2 equ 018Dh ;# ">
+"15 zones.c
+[v _zones `S99 ~T0 @X0 -> 3 `i e ]
+"18
+[v _zones_init `(v ~T0 @X0 1 ef ]
+{
+[e :U _zones_init ]
+[f ]
+"19
+[v _z `uc ~T0 @X0 1 a ]
+"20
+{
+[e = _z -> -> 0 `i `uc ]
+[e $ < -> _z `i -> 3 `i 101  ]
+[e $U 102  ]
+[e :U 101 ]
+{
+"21
+[e = . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 0 -> 22 `i ]
+"22
+[e = . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 1 -> 0 `i ]
+"23
+[e = . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 2 -> -> 83 `ui `uc ]
+"24
+}
+[e ++ _z -> -> 1 `i `uc ]
+[e $ < -> _z `i -> 3 `i 101  ]
+[e :U 102 ]
+}
+"25
+[e :UE 100 ]
+}
+"28
+[v _update_zone_mode `(v ~T0 @X0 1 ef1`uc ]
+{
+[e :U _update_zone_mode ]
+[v _z `uc ~T0 @X0 1 r1 ]
+[f ]
+"29
+[e $ ! < . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 0 -> 19 `i 105  ]
+"30
+[e = . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 2 -> -> 72 `ui `uc ]
+[e $U 106  ]
+"31
+[e :U 105 ]
+[e $ ! > . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 0 -> 25 `i 107  ]
+"32
+[e = . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 2 -> -> 67 `ui `uc ]
+[e $U 108  ]
+"33
+[e :U 107 ]
+"34
+[e = . *U + &U _zones * -> _z `ux -> -> # *U &U _zones `ui `ux 2 -> -> 83 `ui `uc ]
+[e :U 108 ]
+[e :U 106 ]
+"35
+[e :UE 104 ]
+}
+"38
+[v _update_all_leds `(v ~T0 @X0 1 ef ]
+{
+[e :U _update_all_leds ]
+[f ]
+"39
+[e = _RD0 -> ? == -> . *U + &U _zones * -> -> -> 0 `i `ui `ux -> -> # *U &U _zones `ui `ux 2 `ui -> 72 `ui : -> 1 `i -> 0 `i `b ]
+"40
+[e = _RD1 -> ? == -> . *U + &U _zones * -> -> -> 1 `i `ui `ux -> -> # *U &U _zones `ui `ux 2 `ui -> 72 `ui : -> 1 `i -> 0 `i `b ]
+"41
+[e = _RD2 -> ? == -> . *U + &U _zones * -> -> -> 2 `i `ui `ux -> -> # *U &U _zones `ui `ux 2 `ui -> 72 `ui : -> 1 `i -> 0 `i `b ]
+"42
+[e = _RA0 -> ? == -> . *U + &U _zones * -> -> -> 0 `i `ui `ux -> -> # *U &U _zones `ui `ux 2 `ui -> 67 `ui : -> 1 `i -> 0 `i `b ]
+"43
+[e = _RA1 -> ? == -> . *U + &U _zones * -> -> -> 1 `i `ui `ux -> -> # *U &U _zones `ui `ux 2 `ui -> 67 `ui : -> 1 `i -> 0 `i `b ]
+"44
+[e = _RA2 -> ? == -> . *U + &U _zones * -> -> -> 2 `i `ui `ux -> -> # *U &U _zones `ui `ux 2 `ui -> 67 `ui : -> 1 `i -> 0 `i `b ]
+"45
+[e :UE 109 ]
+}
+"62
+[v _process_keypress `(v ~T0 @X0 1 ef1`uc ]
+{
+[e :U _process_keypress ]
+[v _key `uc ~T0 @X0 1 r1 ]
+[f ]
+"63
+[v _zone `uc ~T0 @X0 1 a ]
+[e = _zone -> % -> _key `i -> 3 `i `uc ]
+"65
+[e $ ! <= -> _key `i -> 2 `i 111  ]
+{
+"66
+[e $ ! < . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 0 -> 35 `i 112  ]
+[e ++ . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 0 -> 1 `i ]
+[e :U 112 ]
+"67
+}
+[e $U 113  ]
+[e :U 111 ]
+[e $ ! <= -> _key `i -> 5 `i 114  ]
+{
+"68
+[e $ ! > . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 0 -> 15 `i 115  ]
+[e -- . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 0 -> 1 `i ]
+[e :U 115 ]
+"69
+}
+[e $U 116  ]
+[e :U 114 ]
+[e $ ! <= -> _key `i -> 8 `i 117  ]
+{
+"70
+[e $ ! < . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 1 -> 30 `i 118  ]
+[e ++ . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 1 -> 1 `i ]
+[e :U 118 ]
+"71
+}
+[e $U 119  ]
+[e :U 117 ]
+{
+"72
+[e $ ! > . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 1 -> 0 `i 120  ]
+[e -- . *U + &U _zones * -> _zone `ux -> -> # *U &U _zones `ui `ux 1 -> 1 `i ]
+[e :U 120 ]
+"73
+}
+[e :U 119 ]
+[e :U 116 ]
+[e :U 113 ]
+"75
+[e ( _update_zone_mode (1 _zone ]
+"76
+[e ( _update_all_leds ..  ]
+"77
+[e :UE 110 ]
+}

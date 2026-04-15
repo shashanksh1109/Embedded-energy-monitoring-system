@@ -1,0 +1,254 @@
+Version 4.0 HI-TECH Software Intermediate Code
+"2981 /opt/microchip/xc8/v2.46/pic/include/proc/pic16f877a.h
+[v _TRISC6 `Vb ~T0 @X0 0 e@1086 ]
+"2984
+[v _TRISC7 `Vb ~T0 @X0 0 e@1087 ]
+"2080
+[v _SPBRG `Vuc ~T0 @X0 0 e@153 ]
+"1999
+[v _TXSTA `Vuc ~T0 @X0 0 e@152 ]
+"964
+[v _RCSTA `Vuc ~T0 @X0 0 e@24 ]
+"3041
+[v _TXIF `Vb ~T0 @X0 0 e@100 ]
+"1059
+[v _TXREG `Vuc ~T0 @X0 0 e@25 ]
+"54 /opt/microchip/xc8/v2.46/pic/include/proc/pic16f877a.h
+[; <" INDF equ 00h ;# ">
+"61
+[; <" TMR0 equ 01h ;# ">
+"68
+[; <" PCL equ 02h ;# ">
+"75
+[; <" STATUS equ 03h ;# ">
+"161
+[; <" FSR equ 04h ;# ">
+"168
+[; <" PORTA equ 05h ;# ">
+"218
+[; <" PORTB equ 06h ;# ">
+"280
+[; <" PORTC equ 07h ;# ">
+"342
+[; <" PORTD equ 08h ;# ">
+"404
+[; <" PORTE equ 09h ;# ">
+"436
+[; <" PCLATH equ 0Ah ;# ">
+"456
+[; <" INTCON equ 0Bh ;# ">
+"534
+[; <" PIR1 equ 0Ch ;# ">
+"596
+[; <" PIR2 equ 0Dh ;# ">
+"636
+[; <" TMR1 equ 0Eh ;# ">
+"643
+[; <" TMR1L equ 0Eh ;# ">
+"650
+[; <" TMR1H equ 0Fh ;# ">
+"657
+[; <" T1CON equ 010h ;# ">
+"732
+[; <" TMR2 equ 011h ;# ">
+"739
+[; <" T2CON equ 012h ;# ">
+"810
+[; <" SSPBUF equ 013h ;# ">
+"817
+[; <" SSPCON equ 014h ;# ">
+"887
+[; <" CCPR1 equ 015h ;# ">
+"894
+[; <" CCPR1L equ 015h ;# ">
+"901
+[; <" CCPR1H equ 016h ;# ">
+"908
+[; <" CCP1CON equ 017h ;# ">
+"966
+[; <" RCSTA equ 018h ;# ">
+"1061
+[; <" TXREG equ 019h ;# ">
+"1068
+[; <" RCREG equ 01Ah ;# ">
+"1075
+[; <" CCPR2 equ 01Bh ;# ">
+"1082
+[; <" CCPR2L equ 01Bh ;# ">
+"1089
+[; <" CCPR2H equ 01Ch ;# ">
+"1096
+[; <" CCP2CON equ 01Dh ;# ">
+"1154
+[; <" ADRESH equ 01Eh ;# ">
+"1161
+[; <" ADCON0 equ 01Fh ;# ">
+"1257
+[; <" OPTION_REG equ 081h ;# ">
+"1327
+[; <" TRISA equ 085h ;# ">
+"1377
+[; <" TRISB equ 086h ;# ">
+"1439
+[; <" TRISC equ 087h ;# ">
+"1501
+[; <" TRISD equ 088h ;# ">
+"1563
+[; <" TRISE equ 089h ;# ">
+"1620
+[; <" PIE1 equ 08Ch ;# ">
+"1682
+[; <" PIE2 equ 08Dh ;# ">
+"1722
+[; <" PCON equ 08Eh ;# ">
+"1756
+[; <" SSPCON2 equ 091h ;# ">
+"1818
+[; <" PR2 equ 092h ;# ">
+"1825
+[; <" SSPADD equ 093h ;# ">
+"1832
+[; <" SSPSTAT equ 094h ;# ">
+"2001
+[; <" TXSTA equ 098h ;# ">
+"2082
+[; <" SPBRG equ 099h ;# ">
+"2089
+[; <" CMCON equ 09Ch ;# ">
+"2159
+[; <" CVRCON equ 09Dh ;# ">
+"2224
+[; <" ADRESL equ 09Eh ;# ">
+"2231
+[; <" ADCON1 equ 09Fh ;# ">
+"2290
+[; <" EEDATA equ 010Ch ;# ">
+"2297
+[; <" EEADR equ 010Dh ;# ">
+"2304
+[; <" EEDATH equ 010Eh ;# ">
+"2311
+[; <" EEADRH equ 010Fh ;# ">
+"2318
+[; <" EECON1 equ 018Ch ;# ">
+"2363
+[; <" EECON2 equ 018Dh ;# ">
+"19 uart.c
+[v _uart_init `(v ~T0 @X0 1 ef ]
+{
+[e :U _uart_init ]
+[f ]
+"20
+[e = _TRISC6 -> -> 0 `i `b ]
+"21
+[e = _TRISC7 -> -> 1 `i `b ]
+"22
+[e = _SPBRG -> -> 51 `i `uc ]
+"23
+[e = _TXSTA -> -> 36 `i `uc ]
+"24
+[e = _RCSTA -> -> 144 `i `uc ]
+"25
+[e :UE 99 ]
+}
+"28
+[v _uart_send_byte `(v ~T0 @X0 1 ef1`uc ]
+{
+[e :U _uart_send_byte ]
+[v _byte `uc ~T0 @X0 1 r1 ]
+[f ]
+"29
+[e $U 101  ]
+[e :U 102 ]
+[e :U 101 ]
+[e $ ! _TXIF 102  ]
+[e :U 103 ]
+"30
+[e = _TXREG _byte ]
+"31
+[e :UE 100 ]
+}
+"37
+[v _uart_send_packet `(v ~T0 @X0 1 ef3`*Cuc`f`uc ]
+"39
+{
+[e :U _uart_send_packet ]
+"37
+[v _device_id `*Cuc ~T0 @X0 1 r1 ]
+"38
+[v _value `f ~T0 @X0 1 r2 ]
+"39
+[v _type `uc ~T0 @X0 1 r3 ]
+[f ]
+"40
+[v _pkt `uc ~T0 @X0 -> 20 `i a ]
+"41
+[v _i `uc ~T0 @X0 1 a ]
+"42
+[v _checksum `ui ~T0 @X0 1 a ]
+[e = _checksum -> -> 0 `i `ui ]
+"45
+{
+[e = _i -> -> 0 `i `uc ]
+[e $ < -> _i `i -> 20 `i 105  ]
+[e $U 106  ]
+[e :U 105 ]
+[e = *U + &U _pkt * -> _i `ux -> -> # *U &U _pkt `ui `ux -> -> 0 `i `uc ]
+[e ++ _i -> -> 1 `i `uc ]
+[e $ < -> _i `i -> 20 `i 105  ]
+[e :U 106 ]
+}
+"48
+{
+[e = _i -> -> 0 `i `uc ]
+[e $U 111  ]
+[e :U 108 ]
+"49
+[e = *U + &U _pkt * -> _i `ux -> -> # *U &U _pkt `ui `ux -> *U + _device_id * -> _i `ux -> -> # *U _device_id `ui `ux `uc ]
+[e ++ _i -> -> 1 `i `uc ]
+[e :U 111 ]
+[e $ && < -> _i `i -> 7 `i != -> *U + _device_id * -> _i `ux -> -> # *U _device_id `ui `ux `ui -> 0 `ui 108  ]
+[e :U 109 ]
+}
+"52
+[e = *U + &U _pkt * -> -> -> 8 `i `ui `ux -> -> # *U &U _pkt `ui `ux = *U + &U _pkt * -> -> -> 9 `i `ui `ux -> -> # *U &U _pkt `ui `ux = *U + &U _pkt * -> -> -> 10 `i `ui `ux -> -> # *U &U _pkt `ui `ux = *U + &U _pkt * -> -> -> 11 `i `ui `ux -> -> # *U &U _pkt `ui `ux -> -> 0 `i `uc ]
+"55
+[v _fp `*uc ~T0 @X0 1 a ]
+[e = _fp -> &U _value `*uc ]
+"56
+[e = *U + &U _pkt * -> -> -> 12 `i `ui `ux -> -> # *U &U _pkt `ui `ux *U + _fp * -> -> 0 `i `x -> -> # *U _fp `i `x ]
+"57
+[e = *U + &U _pkt * -> -> -> 13 `i `ui `ux -> -> # *U &U _pkt `ui `ux *U + _fp * -> -> 1 `i `x -> -> # *U _fp `i `x ]
+"58
+[e = *U + &U _pkt * -> -> -> 14 `i `ui `ux -> -> # *U &U _pkt `ui `ux *U + _fp * -> -> 2 `i `x -> -> # *U _fp `i `x ]
+"59
+[e = *U + &U _pkt * -> -> -> 15 `i `ui `ux -> -> # *U &U _pkt `ui `ux *U + _fp * -> -> 3 `i `x -> -> # *U _fp `i `x ]
+"62
+[e = *U + &U _pkt * -> -> -> 16 `i `ui `ux -> -> # *U &U _pkt `ui `ux _type ]
+"65
+{
+[e = _i -> -> 0 `i `uc ]
+[e $ < -> _i `i -> 17 `i 112  ]
+[e $U 113  ]
+[e :U 112 ]
+[e =+ _checksum -> *U + &U _pkt * -> _i `ux -> -> # *U &U _pkt `ui `ux `ui ]
+[e ++ _i -> -> 1 `i `uc ]
+[e $ < -> _i `i -> 17 `i 112  ]
+[e :U 113 ]
+}
+"66
+[e = *U + &U _pkt * -> -> -> 17 `i `ui `ux -> -> # *U &U _pkt `ui `ux -> % _checksum -> -> 256 `i `ui `uc ]
+"71
+{
+[e = _i -> -> 0 `i `uc ]
+[e $ < -> _i `i -> 20 `i 115  ]
+[e $U 116  ]
+[e :U 115 ]
+[e ( _uart_send_byte (1 *U + &U _pkt * -> _i `ux -> -> # *U &U _pkt `ui `ux ]
+[e ++ _i -> -> 1 `i `uc ]
+[e $ < -> _i `i -> 20 `i 115  ]
+[e :U 116 ]
+}
+"72
+[e :UE 104 ]
+}
