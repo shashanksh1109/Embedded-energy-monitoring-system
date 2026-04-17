@@ -102,7 +102,7 @@ resource "aws_ecs_task_definition" "backend" {
         interval    = 30
         timeout     = 5
         retries     = 3
-        startPeriod = 60  # give Spring Boot 60s to start before checking
+        startPeriod = 120  # give Spring Boot 120s to start before checking
       }
     }
   ])

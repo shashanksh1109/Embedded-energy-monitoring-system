@@ -135,3 +135,18 @@ SELECT 'HVAC_A',  id, 'HVAC',      FALSE, 'HVAC controller - Zone A'    FROM zon
 UNION ALL
 SELECT 'POWER_A', id, 'POWER',     FALSE, 'Power meter - Zone A'        FROM zones WHERE name = 'Zone_A'
 ON CONFLICT (device_id) DO NOTHING;
+
+-- system_mode: stores current simulation/hardware mode
+-- Only one row ever exists (id=1)
+CREATE TABLE IF NOT EXISTS system_mode (
+    id         INTEGER     PRIMARY KEY DEFAULT 1,
+    mode       VARCHAR(16) NOT NULL DEFAULT 'SIMULATION',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT single_row CHECK (id = 1),
+    CONSTRAINT valid_mode CHECK (mode IN ('SIMULATION', 'HARDWARE'))
+);
+
+-- Insert default row
+INSERT INTO system_mode (id, mode)
+VALUES (1, 'SIMULATION')
+ON CONFLICT (id) DO NOTHING;

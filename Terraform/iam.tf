@@ -121,3 +121,29 @@ output "ecs_task_role_arn" {
   description = "ARN of ECS task role"
   value       = aws_iam_role.ecs_task.arn
 }
+
+# Allow Spring Boot container to stop/start ECS sensor service
+# Needed for simulation/hardware mode switching
+resource "aws_iam_policy" "task_ecs_control" {
+  name        = "${var.project_name}-task-ecs-control"
+  description = "Allows running containers to control ECS services"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:UpdateService",
+          "ecs:DescribeServices"
+        ]
+        Resource = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${var.project_name}-cluster/${var.project_name}-sensor"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "task_ecs_control" {
+  role       = aws_iam_role.ecs_task.name
+  policy_arn = aws_iam_policy.task_ecs_control.arn
+}
