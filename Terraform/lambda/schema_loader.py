@@ -1,8 +1,8 @@
 """
 schema_loader.py - Lambda function to load database schema
 Uses pg8000 (pure Python) instead of psycopg2 to avoid binary compatibility issues
+Always runs CREATE TABLE IF NOT EXISTS so new tables get added automatically.
 """
-
 import json
 import os
 import boto3
@@ -14,58 +14,48 @@ def get_secret(secret_arn, region):
     return json.loads(response['SecretString'])
 
 def lambda_handler(event, context):
-    region = os.environ['AWS_REGION']
+    region     = os.environ['AWS_REGION']
     secret_arn = os.environ['DB_SECRET_ARN']
-    db_host = os.environ['DB_HOST']
-    db_name = os.environ['DB_NAME']
+    db_host    = os.environ['DB_HOST']
+    db_name    = os.environ['DB_NAME']
 
     print(f"[SCHEMA] Connecting to {db_host}/{db_name}")
-
     creds = get_secret(secret_arn, region)
 
     conn = pg8000.connect(
-        host=db_host,
-        port=5432,
-        database=db_name,
-        user=creds['username'],
-        password=creds['password']
+        host     = db_host,
+        port     = 5432,
+        database = db_name,
+        user     = creds['username'],
+        password = creds['password']
     )
     conn.autocommit = True
     cursor = conn.cursor()
 
-    # Check if schema already exists
-    cursor.execute("""
-        SELECT COUNT(*) FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_name = 'zones'
-    """)
-    count = cursor.fetchone()[0]
-
-    if count > 0:
-        print("[SCHEMA] Schema already exists, skipping")
-        cursor.close()
-        conn.close()
-        return {"statusCode": 200, "body": "Schema already exists"}
-
     # Download schema from S3
     print("[SCHEMA] Downloading schema from S3...")
-    s3 = boto3.client('s3', region_name=region)
+    s3     = boto3.client('s3', region_name=region)
     bucket = os.environ['SCHEMA_BUCKET']
-    key = os.environ['SCHEMA_KEY']
+    key    = os.environ['SCHEMA_KEY']
 
-    response = s3.get_object(Bucket=bucket, Key=key)
+    response   = s3.get_object(Bucket=bucket, Key=key)
     schema_sql = response['Body'].read().decode('utf-8')
 
-    # Execute schema — pg8000 needs statements split individually
+    # Always execute schema — CREATE TABLE IF NOT EXISTS is idempotent
+    # This ensures new tables added later get created automatically
     print("[SCHEMA] Executing schema...")
     statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
+    success = 0
+    skipped = 0
     for stmt in statements:
         try:
             cursor.execute(stmt)
+            success += 1
         except Exception as e:
             print(f"[SCHEMA] Warning: {e}")
+            skipped += 1
 
-    print("[SCHEMA] Schema loaded successfully")
+    print(f"[SCHEMA] Done: {success} statements succeeded, {skipped} skipped")
     cursor.close()
     conn.close()
-
-    return {"statusCode": 200, "body": "Schema loaded successfully"}
+    return {"statusCode": 200, "body": f"Schema loaded: {success} succeeded, {skipped} skipped"}
