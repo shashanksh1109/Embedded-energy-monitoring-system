@@ -51,10 +51,10 @@ function ZonePanel({ zone }) {
     const fetchAll = async () => {
       try {
         const [t, o, h, p] = await Promise.all([
-          getLatestTemperature(zone.id).catch(() => null),
-          getLatestOccupancy(zone.id).catch(() => null),
-          getLatestHvac(zone.id).catch(() => null),
-          getLatestPower(zone.id).catch(() => null),
+          getLatestTemperature(zone.name).catch(() => null),
+          getLatestOccupancy(zone.name).catch(() => null),
+          getLatestHvac(zone.name).catch(() => null),
+          getLatestPower(zone.name).catch(() => null),
         ])
         setTemp(t)
         setOcc(o)
@@ -81,9 +81,9 @@ function ZonePanel({ zone }) {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <StatCard label="Temperature" value={temp ? `${temp.valueC?.toFixed(1)}°C` : '—'} color="orange" />
-            <StatCard label="Occupancy"   value={occ  ? `${occ.peopleCount} ppl`        : '—'} color="blue"   />
-            <StatCard label="Setpoint"    value={hvac ? `${hvac.setpointC?.toFixed(1)}°C`: '—'} color="green"  />
+            <StatCard label="Temperature" value={temp ? `${temp.temperatureC?.toFixed(1)}°C` : '—'} color="orange" />
+            <StatCard label="Occupancy"   value={occ  ? `${occ.occupancyCount} ppl`        : '—'} color="blue"   />
+            <StatCard label="Setpoint"    value={hvac ? `${hvac.setpoint?.toFixed(1)}°C`: '—'} color="green"  />
             <StatCard label="Power"       value={power? `${power.powerKw?.toFixed(2)} kW`: '—'} color="purple" />
           </div>
           <div>
