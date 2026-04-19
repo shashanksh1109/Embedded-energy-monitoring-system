@@ -93,3 +93,24 @@ resource "aws_s3_bucket_versioning" "snapshots" {
     status = "Enabled"
   }
 }
+
+# ─── FRONTEND AUTO-DEPLOY ─────────────────────────────────────────────
+# Automatically rebuilds and redeploys frontend with correct ALB URL
+# Triggers whenever ALB DNS name changes (e.g. after terraform destroy/apply)
+resource "null_resource" "frontend_deploy" {
+  triggers = {
+    alb_dns    = aws_lb.main.dns_name
+    bucket     = aws_s3_bucket.frontend.id
+  }
+
+  provisioner "local-exec" {
+    command = <<-CMD
+      cd ${path.root}/../Frontend
+      echo "VITE_API_URL=http://${aws_lb.main.dns_name}/api" > .env.production
+      npm run build
+      aws s3 sync dist/ s3://${aws_s3_bucket.frontend.id}/ --delete
+    CMD
+  }
+
+  depends_on = [aws_lb.main, aws_s3_bucket.frontend, aws_s3_bucket_policy.frontend]
+}

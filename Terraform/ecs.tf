@@ -194,9 +194,10 @@ resource "aws_ecs_task_definition" "sensor" {
 
   container_definitions = jsonencode([
     {
-      name    = "sensor"
-      image   = "${aws_ecr_repository.sensor.repository_url}:latest"
-      command = ["./temp_sensor", "TEMP_A", "Zone_A", "22.0", "5"]
+      name       = "sensor"
+      image      = "${aws_ecr_repository.sensor.repository_url}:latest"
+      entryPoint = ["sh", "-c"]
+      command    = ["until ./temp_sensor TEMP_A Zone_A 22.0 5; do echo 'Sensor exited, retrying in 15s...'; sleep 15; done"]
 
       environment = [
         {
@@ -421,7 +422,7 @@ resource "aws_service_discovery_service" "gateway" {
   name = "gateway"
 
   dns_config {
-    namespace_id = "ns-rgtrf4tprjcl2hhg"
+    namespace_id = aws_service_discovery_private_dns_namespace.main.id
 
     dns_records {
       ttl  = 10
@@ -432,4 +433,18 @@ resource "aws_service_discovery_service" "gateway" {
   health_check_custom_config {
     failure_threshold = 1
   }
+}
+
+# ─── SERVICE DISCOVERY NAMESPACE ──────────────────────────────────────
+resource "aws_service_discovery_private_dns_namespace" "main" {
+  name        = "energy.local"
+  description = "Private DNS namespace for ECS service discovery"
+  vpc         = aws_vpc.main.id
+}
+
+# ─── ROUTE53 VPC ASSOCIATION ──────────────────────────────────────────
+# Associates the service discovery hosted zone with the VPC used by ECS tasks
+resource "aws_route53_zone_association" "energy_local" {
+  zone_id = aws_service_discovery_private_dns_namespace.main.hosted_zone
+  vpc_id  = aws_vpc.main.id
 }
