@@ -118,12 +118,12 @@ jobs:
       - name: Build React app
         working-directory: Frontend
         env:
-          VITE_API_URL: http://energy-management-alb-877984256.us-east-1.elb.amazonaws.com/api
+          VITE_API_URL: http://$(aws elbv2 describe-load-balancers --names energy-management-alb --query 'LoadBalancers[0].DNSName' --output text)/api
         run: npm run build
       - name: Deploy to S3
         run: |
           aws s3 sync Frontend/dist/ \
-            s3://energy-management-frontend-993268716712/ \
+            s3://$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `energy-management-frontend`)].Name' --output text)/ \
             --delete \
             --region $AWS_REGION
 

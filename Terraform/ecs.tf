@@ -353,6 +353,12 @@ resource "aws_ecs_service" "gateway" {
     Name = "${var.project_name}-gateway-service"
   }
 
+  load_balancer {
+    target_group_arn = aws_lb_target_group.gateway_tcp.arn
+    container_name   = "gateway"
+    container_port   = 8080
+  }
+
   service_registries {
     registry_arn = aws_service_discovery_service.gateway.arn
   }

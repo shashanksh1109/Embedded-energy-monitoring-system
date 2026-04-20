@@ -86,3 +86,8 @@ output "public_subnet_ids" {
   description = "Public subnet IDs — ALB lives here"
   value       = aws_subnet.public[*].id
 }
+
+output "gateway_nlb_dns" {
+  description = "NLB DNS name for PIC bridge TCP connection"
+  value       = aws_lb.gateway_nlb.dns_name
+}

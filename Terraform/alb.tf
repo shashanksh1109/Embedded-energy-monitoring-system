@@ -201,3 +201,50 @@ resource "aws_security_group_rule" "ecs_internal_8080" {
   source_security_group_id = aws_security_group.ecs.id
   description              = "Allow ECS tasks to communicate internally on port 8080"
 }
+
+# ─── NETWORK LOAD BALANCER (TCP - for PIC bridge) ─────────────────────
+resource "aws_lb" "gateway_nlb" {
+  name               = "${var.project_name}-nlb"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = aws_subnet.public[*].id
+
+  tags = {
+    Name = "${var.project_name}-nlb"
+  }
+}
+
+resource "aws_lb_target_group" "gateway_tcp" {
+  name        = "${var.project_name}-gateway-tcp"
+  port        = 8080
+  protocol    = "TCP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    protocol = "TCP"
+    port     = 8080
+  }
+}
+
+resource "aws_lb_listener" "gateway_tcp" {
+  load_balancer_arn = aws_lb.gateway_nlb.arn
+  port              = 8080
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.gateway_tcp.arn
+  }
+}
+
+# Allow NLB to reach ECS gateway on port 8080 (for PIC bridge TCP)
+resource "aws_security_group_rule" "ecs_nlb_8080" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.ecs.id
+  description       = "Allow NLB TCP traffic from PIC bridge"
+}

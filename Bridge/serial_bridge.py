@@ -14,7 +14,7 @@ import sys
 SERIAL_PORT  = 'COM7'
 BAUD_RATE    = 9600
 PACKET_SIZE  = 20
-GATEWAY_HOST = 'energy-management-alb-1672504354.us-east-1.elb.amazonaws.com'
+GATEWAY_HOST = 'energy-management-nlb-37d1544f90cf9633.elb.us-east-1.amazonaws.com'
 GATEWAY_PORT = 8080
 RECONNECT_DELAY = 5
 
