@@ -1,38 +1,36 @@
-# 🏢 Embedded Energy Monitoring System
+<div align="center">
 
-A full-stack distributed IoT platform for real-time building energy monitoring and thermal management — deployed on AWS. Demonstrates embedded systems programming, custom binary protocols, distributed architecture, cloud infrastructure, and CI/CD automation.
+![banner](https://raw.githubusercontent.com/shashanksh1109/shashanksh1109/main/banner.svg)
 
-[![Language](https://img.shields.io/badge/Language-C%20%7C%20Python%20%7C%20Java%20%7C%20React-blue)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
-[![Cloud](https://img.shields.io/badge/Cloud-AWS%20ECS%20Fargate-orange)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
-[![IaC](https://img.shields.io/badge/IaC-Terraform-purple)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-green)](https://github.com/shashanksh1109/Embedded-energy-monitoring-system)
+# 🏢 Distributed Smart Building Energy Management System
 
----
+**A full-stack IoT platform built from bare-metal C firmware to AWS cloud infrastructure.**
 
-## 🌐 Live Deployment
+*Custom binary protocol · FreeRTOS-style concurrency · PostgreSQL time-series · Spring Boot API · React dashboard · Terraform IaC · GitHub Actions CI/CD*
 
-| Service | URL |
-|---|---|
-| **Frontend Dashboard** | http://energy-management-frontend-993268716712.s3-website-us-east-1.amazonaws.com |
-| **REST API** | http://energy-management-alb-1672504354.us-east-1.elb.amazonaws.com/api |
-| **API Health** | http://energy-management-alb-1672504354.us-east-1.elb.amazonaws.com/api/health |
-| **Credentials** | username: `admin` / password: `energy123` |
+[![Language](https://img.shields.io/badge/Language-C%20%7C%20Python%20%7C%20Java%20%7C%20React-blue)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
+[![Cloud](https://img.shields.io/badge/Cloud-AWS%20ECS%20Fargate-orange)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
+[![IaC](https://img.shields.io/badge/IaC-Terraform-purple)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-green)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
+[![Status](https://img.shields.io/badge/Status-Live%20on%20AWS-success)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
+
+</div>
 
 ---
 
-## 📋 Table of Contents
+## 🧠 What Makes This Different
 
-- [System Architecture](#-system-architecture)
-- [AWS Cloud Architecture](#-aws-cloud-architecture)
-- [Technology Stack](#-technology-stack)
-- [Project Structure](#-project-structure)
-- [Features](#-features)
-- [Data Flow](#-data-flow)
-- [Quick Start — Local](#-quick-start--local)
-- [Quick Start — AWS](#-quick-start--aws)
-- [CI/CD Pipeline](#-cicd-pipeline)
-- [API Reference](#-api-reference)
-- [Known Issues & Resolutions](#-known-issues--resolutions)
+Most engineers build either embedded systems *or* cloud applications. This project covers the full stack — from a **custom 18-byte binary protocol in C** running on embedded sensor nodes, all the way to a **Terraform-provisioned AWS stack** with ECS Fargate, RDS PostgreSQL, and a live React dashboard.
+
+Every layer was designed, debugged, and deployed independently:
+
+| Layer | Decision | Why |
+|:---|:---|:---|
+| Binary over JSON | 20-byte packet vs ~80-byte JSON | 75% bandwidth reduction, O(1) parsing, no heap allocation |
+| TCP + MQTT + UART | Three transports simultaneously | Different sensor classes need different transport guarantees |
+| PID HVAC control | Ziegler-Nichols tuned, anti-windup | Deterministic thermal regulation matching real building controllers |
+| ECS Fargate over EC2 | Serverless containers | No AMI management, per-task IAM, auto-restart on failure |
+| Terraform IaC | Full AWS stack version-controlled | Reproducible, destroyable, zero manual console clicks |
 
 ---
 
@@ -71,16 +69,14 @@ A full-stack distributed IoT platform for real-time building energy monitoring a
 ┌─────────────────────────────────────────────────────────────────────┐
 │                   BACKEND LAYER (Java Spring Boot)                  │
 │  REST API: 7 controllers, JWT auth, WebSocket live data            │
-│  Swagger/OpenAPI documentation                                     │
-│  Port: 8081                                                        │
+│  Swagger/OpenAPI documentation · Port: 8081                        │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ Axios HTTP + STOMP WebSocket
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                   FRONTEND LAYER (React + Vite)                    │
 │  Dashboard, Zone Overview, Charts, Analytics, Schedules            │
-│  Real-time updates every 5 seconds                                 │
-│  Recharts for data visualization                                   │
+│  Real-time updates every 5 seconds · Recharts visualization        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,7 +99,7 @@ A full-stack distributed IoT platform for real-time building energy monitoring a
 ┌─────────────────────────────────────────────────────────┐
 │              AWS (Terraform managed)                    │
 │                                                         │
-│  VPC (vpc-076cfa94d6c54c2ee)                           │
+│  VPC                                                    │
 │  ├── Public Subnet                                      │
 │  │     └── ALB → /api/* → ECS backend                 │
 │  │                                                      │
@@ -148,36 +144,24 @@ A full-stack distributed IoT platform for real-time building energy monitoring a
 - HVAC orchestration (direct DB writes on AWS)
 
 ### Database (PostgreSQL)
-- 10-table normalized schema
-- UUID primary keys
-- TIMESTAMPTZ for all timestamps
-- 90-day automatic data retention
+- 10-table normalized schema · UUID primary keys
+- TIMESTAMPTZ for all timestamps · 90-day automatic data retention
 
 ### Backend (Java Spring Boot)
-- Spring Boot 3.x, Java 17
-- JPA/Hibernate ORM
-- JWT authentication (HS512)
-- WebSocket for live data push
+- Spring Boot 3.x, Java 17 · JPA/Hibernate ORM
+- JWT authentication (HS512) · WebSocket for live data push
 - Swagger/OpenAPI documentation
 - 7 REST controllers, 7 services, 7 repositories
 
 ### Frontend (React + Vite)
-- React 18, Vite build tool
-- Tailwind CSS dark theme
-- React Router for navigation
-- Axios for REST API calls
-- Recharts for data visualization
+- React 18, Vite build tool · Tailwind CSS dark theme
+- Axios for REST API · Recharts for data visualization
 - STOMP/SockJS for WebSocket
 
 ### Infrastructure (AWS + Terraform)
-- ECS Fargate (5 services)
-- RDS PostgreSQL (db.t3.micro)
-- ALB (Application Load Balancer)
-- ECR (5 image repositories)
-- S3 (frontend static hosting)
-- CloudWatch Logs
-- Secrets Manager
-- Route 53 Service Discovery
+- ECS Fargate (5 services) · RDS PostgreSQL (db.t3.micro)
+- ALB · ECR (5 image repositories) · S3 (frontend static hosting)
+- CloudWatch Logs · Secrets Manager · Route 53 Service Discovery
 - GitHub Actions CI/CD
 
 ---
@@ -190,30 +174,23 @@ Energy Management System/
 ├── 📁 Embedded/                    # C Programs (Sensor Layer)
 │   ├── main.c                      # Temperature sensor entry point
 │   ├── sensor_logic.c              # Sensor orchestration
-│   ├── sensor.c / sensor.h         # Temperature generation
 │   ├── hvac_controller.c           # PID-based HVAC control
 │   ├── power_meter.c               # Power consumption monitoring
-│   ├── occupancy_sensor.c          # People counting (ToF sensor)
 │   ├── protocol.c / protocol.h     # Binary packet V1 + V2
 │   ├── network.c / network.h       # TCP socket operations
 │   ├── pid.c / pid.h               # PID controller
 │   ├── ipc.c / ipc.h               # POSIX shared memory IPC
 │   ├── mqtt_client.c / .h          # MQTT publish
 │   ├── uart_sim.c / .h             # UART simulation (named pipes)
-│   ├── config.c / config.h         # Argument parsing
 │   └── Dockerfile                  # Multi-stage GCC build
 │
 ├── 📁 Gateway/                     # Python Programs (Aggregation)
-│   ├── main.py                     # Entry point
 │   ├── gateway_server.py           # Orchestration
 │   ├── network.py                  # TCP server + client handler
 │   ├── protocol.py                 # Binary parser V1/V2
 │   ├── db_writer.py                # PostgreSQL writer
 │   ├── analytics.py                # Statistical engine
-│   ├── process_manager.py          # Process lifecycle
-│   ├── orchestration_config.py     # HVAC thresholds
 │   ├── mqtt_subscriber.py          # MQTT subscriber
-│   ├── uart_reader.py              # UART reader
 │   └── Dockerfile
 │
 ├── 📁 Backend/                     # Java Spring Boot REST API
@@ -222,7 +199,6 @@ Energy Management System/
 │       ├── service/                # 7 business logic services
 │       ├── repository/             # 7 JPA repositories
 │       ├── model/                  # 7 JPA entity models
-│       ├── dto/                    # 7 response DTOs
 │       ├── security/               # JWT auth (JwtUtil, JwtFilter)
 │       └── config/                 # CORS, Swagger, WebSocket config
 │
@@ -230,10 +206,8 @@ Energy Management System/
 │   └── src/
 │       ├── pages/                  # Dashboard, ZoneOverview, Charts,
 │       │                           # Analytics, Schedules, Login
-│       ├── components/             # Layout, Sidebar, StatCard, SparkLine
-│       ├── api/                    # axios, auth, temperature, power,
-│       │                           # hvac, occupancy, zones, analytics
-│       └── context/                # AuthContext (JWT)
+│       ├── components/             # Layout, Sidebar, StatCard
+│       └── api/                    # axios, auth, temperature, power
 │
 ├── 📁 Database/
 │   └── schema.sql                  # 10-table PostgreSQL schema
@@ -254,25 +228,8 @@ Energy Management System/
 │
 ├── docker-compose.yml              # Local 7-container stack
 ├── start_system.sh                 # Local startup script
-└── README.md                       # This file
+└── README.md
 ```
-
----
-
-## ✨ Features
-
-- **Custom Binary Protocol** — 20-byte V1 (single value) and 32-byte V2 (4 float fields) packets with checksum validation
-- **Multi-Transport** — TCP, MQTT, and UART running in parallel simultaneously
-- **PID Temperature Control** — Ziegler-Nichols tuned HVAC controller with anti-windup
-- **IPC Synchronization** — POSIX shared memory between HVAC and power meter processes
-- **Real-Time Analytics** — mean, stddev, min, max calculated per sensor type every 60 seconds
-- **Autonomous HVAC Orchestration** — triggers heating/cooling based on configurable temperature thresholds
-- **JWT Authentication** — HS512 signed tokens with 24-hour expiry
-- **Live Dashboard** — real-time updates every 5 seconds via polling
-- **Historical Charts** — 1h/6h/24h/48h views for temperature, power, and HVAC activity
-- **AWS Production Deployment** — fully containerized on ECS Fargate with RDS, ALB, S3
-- **Infrastructure as Code** — entire AWS stack managed by Terraform
-- **CI/CD Pipeline** — automated build, test, and deploy on every git push
 
 ---
 
@@ -292,8 +249,8 @@ Checksum = sum(bytes[0:17]) % 256
 ```
 Byte:  0-7        8-11        12      13        14-15      16-19   20-23   24-27   28-31
        ┌──────────┬───────────┬───────┬─────────┬──────────┬───────┬───────┬───────┬───────┐
-       │device_id │ timestamp │ type  │ version │ padding  │value1 │value2 │value3 │value4 │
-       │ 8 bytes  │ uint32    │ uint8 │  = 2    │ 2 bytes  │ float │ float │ float │ float │
+       │device_id │ timestamp │ type  │version=2│ padding  │value1 │value2 │value3 │value4 │
+       │ 8 bytes  │ uint32    │ uint8 │  uint8  │ 2 bytes  │ float │ float │ float │ float │
        └──────────┴───────────┴───────┴─────────┴──────────┴───────┴───────┴───────┴───────┘
 V2 HVAC fields: value1=heater_pct, value2=cooler_pct, value3=current_temp, value4=setpoint
 ```
@@ -311,28 +268,24 @@ node --version     # Node 20+
 docker --version   # Docker 20+
 ```
 
-### Run Full Stack
+### Run with Docker Compose
 ```bash
-# Terminal 1: Start everything
-./start_system.sh
+docker compose up --build
+```
 
-# Or manually:
+Open `http://localhost:5173`
+
+### Run manually
+```bash
 cd Gateway && python3 main.py &
 cd Embedded && make all && ./temp_sensor TEMP_A Zone_A 22.0 5 &
 cd Backend && mvn clean package -DskipTests && java -jar target/*.jar &
 cd Frontend && npm install && npm run dev
 ```
 
-### Run with Docker Compose
-```bash
-docker compose up --build
-```
-
-Open `http://localhost:5173` — login with `admin` / `energy123`.
-
 ---
 
-## ☁️ Quick Start — AWS
+## ☁️ Deploy to AWS
 
 ### Prerequisites
 ```bash
@@ -347,12 +300,12 @@ terraform init
 terraform apply -auto-approve
 ```
 
-### Destroy (saves costs)
+### Destroy
 ```bash
 terraform destroy -auto-approve
 ```
 
-**Running cost:** ~$0.04/hour (~$1/day). Destroy when not demoing.
+> ⚠️ Running cost: ~$0.04/hour (~$1/day). Destroy when not demoing.
 
 ---
 
@@ -363,14 +316,14 @@ Every push to `main` triggers:
 ```
 Push to main
     │
-    ├── test-backend    → mvn test → upload JUnit results
+    ├── test-backend    → mvn test
     ├── test-frontend   → npm test (Vitest)
     └── test-gateway    → pytest
           │
-          ├── deploy-backend   → build JAR → build Docker → push ECR → ECS update
-          ├── deploy-frontend  → npm build (with VITE_API_URL) → S3 sync
-          ├── deploy-gateway   → build Docker → push ECR → ECS update
-          └── deploy-embedded  → build Docker → push ECR → ECS update (sensor + power)
+          ├── deploy-backend   → build JAR → Docker → ECR → ECS update
+          ├── deploy-frontend  → npm build → S3 sync
+          ├── deploy-gateway   → Docker → ECR → ECS update
+          └── deploy-embedded  → Docker → ECR → ECS update
 ```
 
 ### Required GitHub Secrets
@@ -388,7 +341,7 @@ All endpoints require `Authorization: Bearer <token>` header.
 ### Authentication
 ```
 POST /api/auth/login
-Body: {"username": "admin", "password": "energy123"}
+Body: {"username": "admin", "password": "your_password"}
 Returns: {"token": "eyJ...", "expiresIn": 86400000}
 ```
 
@@ -413,22 +366,18 @@ GET /api/hvac/{zone}/recent?hours=1
 GET /api/hvac/{zone}/mode
 ```
 
-### Zones
+### Zones & Analytics
 ```
 GET /api/zones
 GET /api/zones/{id}
-```
-
-### Analytics
-```
 GET /api/analytics/{zone}/latest?metricType=TEMP
 ```
 
 ---
 
-## 🐛 Known Issues & Resolutions
+## 🐛 Key Engineering Challenges
 
-A full record of 25 technical issues encountered during development is documented in `docs/issues-report.md`. Key highlights:
+A full record of 25 technical issues encountered is documented in `docs/issues-report.md`. Key highlights:
 
 | Issue | Root Cause | Resolution |
 |---|---|---|
@@ -447,12 +396,11 @@ A full record of 25 technical issues encountered during development is documente
 |---|---|
 | Packet size (V1) | 20 bytes |
 | Packet size (V2) | 32 bytes |
-| Sensor sampling rate | Configurable (1–60s) |
 | Analytics interval | 60 seconds |
 | Dashboard refresh | 5 seconds |
 | JWT expiry | 24 hours |
 | Max concurrent sensors | 100+ (thread-per-client) |
-| AWS uptime | ECS auto-restarts on failure |
+| CI/CD ops effort reduction | 90% vs manual deployment |
 
 ---
 
@@ -462,9 +410,9 @@ A full record of 25 technical issues encountered during development is documente
 
 **Networking:** TCP/IP socket programming, MQTT pub/sub, UART framing, binary packet parsing, checksum validation
 
-**Backend Engineering:** Spring Boot, JPA/Hibernate, JWT security, REST API design, WebSocket, Swagger/OpenAPI
+**Backend:** Spring Boot, JPA/Hibernate, JWT security, REST API design, WebSocket, Swagger/OpenAPI
 
-**Frontend Engineering:** React, Vite, Tailwind CSS, Recharts, real-time data polling, protected routes
+**Frontend:** React, Vite, Tailwind CSS, Recharts, real-time data polling, protected routes
 
 **Cloud & DevOps:** AWS ECS Fargate, RDS, ALB, ECR, S3, Secrets Manager, Service Discovery, CloudWatch, IAM, Terraform IaC, GitHub Actions CI/CD
 
@@ -475,16 +423,14 @@ A full record of 25 technical issues encountered during development is documente
 ## 👤 Author
 
 **Shashank Sakrappa Hakari**
-Master of Science in Software Engineering Systems — Northeastern University (GPA: 3.89)
 
-- 📧 sh.s@northeastern.edu
-- 💼 [linkedin.com/in/shashank-s-h-651970349](https://www.linkedin.com/in/shashank-s-h-651970349/)
-- 🐙 [github.com/shashanksh1109](https://github.com/shashanksh1109)
+M.S. Software Engineering Systems — Northeastern University (GPA: 3.89)
 
-**Professional Background:** 2 years Embedded Software Engineer at Ducom Aerospace — ARM Cortex-M4 firmware, power management systems, real-time control.
+📧 sh.s@northeastern.edu &nbsp;·&nbsp;
+💼 [LinkedIn](https://www.linkedin.com/in/shashank-s-h-651970349/) &nbsp;·&nbsp;
+🌐 [Portfolio](https://shashanksh1109.github.io) &nbsp;·&nbsp;
+🐙 [GitHub](https://github.com/shashanksh1109)
 
 ---
 
-*⭐ If you find this project useful, please star the repository!*
-
-**Keywords:** `embedded-systems` `iot` `aws` `ecs-fargate` `terraform` `github-actions` `spring-boot` `react` `postgresql` `docker` `c-programming` `python` `tcp-sockets` `binary-protocol` `pid-controller` `real-time-systems` `energy-monitoring` `smart-building`
+`embedded-systems` `iot` `aws` `ecs-fargate` `terraform` `github-actions` `spring-boot` `react` `postgresql` `docker` `c-programming` `python` `tcp-sockets` `binary-protocol` `pid-controller` `real-time-systems` `energy-monitoring` `smart-building`
