@@ -37,47 +37,82 @@ Every layer was designed, debugged, and deployed independently:
 ## 🏗️ System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         BUILDING ZONES                              │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │
-│  │   Zone A     │    │   Zone B     │    │  Zone C      │          │
-│  │ Conference   │    │  Executive   │    │  Basement    │          │
-│  │   Room       │    │   Office     │    │  Storage     │          │
-│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │
-└─────────┼───────────────────┼───────────────────┼───────────────────┘
-          │ TCP/IP Binary     │ TCP/IP Binary     │ TCP/IP Binary
-          │ Protocol V1/V2    │ Protocol V1/V2    │ Protocol V1/V2
-          ▼                   ▼                   ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   GATEWAY LAYER (Python)                            │
-│  Multi-Threaded TCP Server → Binary Parser → DB Writer              │
-│  Analytics Engine (mean/stddev/min/max every 60s)                  │
-│  HVAC Orchestration (threshold-based, direct DB writes on AWS)     │
-│  Transports: TCP + MQTT + UART (named pipes)                       │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │ PostgreSQL (psycopg2)
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   DATABASE LAYER (PostgreSQL)                       │
-│  10 tables: zones, devices, temperature_readings,                  │
-│  occupancy_readings, hvac_state, power_readings,                   │
-│  analytics_snapshots, orchestration_events, schedules,             │
-│  ml_predictions — UUID PKs, TIMESTAMPTZ, 90-day retention          │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │ JPA/Hibernate
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   BACKEND LAYER (Java Spring Boot)                  │
-│  REST API: 7 controllers, JWT auth, WebSocket live data            │
-│  Swagger/OpenAPI documentation · Port: 8081                        │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │ Axios HTTP + STOMP WebSocket
-                           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   FRONTEND LAYER (React + Vite)                    │
-│  Dashboard, Zone Overview, Charts, Analytics, Schedules            │
-│  Real-time updates every 5 seconds · Recharts visualization        │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          PHYSICAL / SIMULATED SENSORS                   │
+│                                                                         │
+│   ┌─────────────────────┐        ┌─────────────────────┐               │
+│   │   SIMULATION MODE   │   OR   │   HARDWARE MODE     │               │
+│   │   (default/CI/CD)   │        │   (--hardware flag) │               │
+│   │                     │        │                     │               │
+│   │  sine wave + noise  │        │  DHT22  (temp)      │               │
+│   │  schedule model     │        │  VL53L1X (occupancy)│               │
+│   │  PID-correlated     │        │  INA219  (power)    │               │
+│   └──────────┬──────────┘        └──────────┬──────────┘               │
+│              └─────────────┬────────────────┘                          │
+│                            │ SensorHAL_t interface                     │
+│                            │ (identical call in either mode)           │
+└────────────────────────────┼────────────────────────────────────────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │ POSIX IPC    │              │
+              │ Shared Mem   │              │
+              ▼              ▼              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      EMBEDDED LAYER (C11)                               │
+│                                                                         │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                  │
+│  │  Zone A     │   │  Zone B     │   │  Zone C     │                  │
+│  │ temp_sensor │   │ temp_sensor │   │ temp_sensor │                  │
+│  │ + occupancy │   │ + occupancy │   │ + occupancy │                  │
+│  │ + power     │   │ + power     │   │ + power     │                  │
+│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                  │
+│         │                 │                  │                         │
+│         └─────── PID HVAC Controller ────────┘                         │
+│                  (Ziegler-Nichols tuned, anti-windup)                  │
+└───────────┬─────────────────────────────────────────────────────────────┘
+            │
+            │  Three parallel transports simultaneously
+            ├─── TCP sockets  (primary — binary V1/V2 packets)
+            ├─── MQTT         (Mosquitto pub/sub)
+            └─── UART         (named pipes → RS-485 on real hardware)
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      GATEWAY LAYER (Python)                             │
+│                                                                         │
+│  Multi-Threaded TCP Server                                             │
+│  ├── Binary Parser (V1/V2 auto-detection + checksum validation)        │
+│  ├── Analytics Engine (mean/stddev/min/max per zone every 60s)         │
+│  ├── HVAC Orchestrator (threshold-based, writes directly to DB)        │
+│  ├── MQTT Subscriber                                                   │
+│  └── UART Reader                                                       │
+└───────────────────────────┬─────────────────────────────────────────────┘
+                            │ psycopg2
+                            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      DATABASE LAYER (PostgreSQL)                        │
+│                                                                         │
+│  10 tables: zones · devices · temperature_readings                     │
+│  occupancy_readings · hvac_state · power_readings                      │
+│  analytics_snapshots · orchestration_events · schedules                │
+│  ml_predictions  —  UUID PKs · TIMESTAMPTZ · 90-day retention         │
+└───────────────────────────┬─────────────────────────────────────────────┘
+                            │ JPA/Hibernate
+                            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      BACKEND LAYER (Java Spring Boot)                   │
+│                                                                         │
+│  7 REST controllers · JWT authentication (HS512)                       │
+│  WebSocket live data push · Swagger/OpenAPI docs · Port 8081           │
+└───────────────────────────┬─────────────────────────────────────────────┘
+                            │ Axios HTTP + STOMP WebSocket
+                            ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      FRONTEND LAYER (React + Vite)                      │
+│                                                                         │
+│  Dashboard · Zone Overview · Charts · Analytics · Schedules            │
+│  Real-time updates every 5s · Recharts · Tailwind dark theme          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -434,3 +469,144 @@ M.S. Software Engineering Systems — Northeastern University (GPA: 3.89)
 ---
 
 `embedded-systems` `iot` `aws` `ecs-fargate` `terraform` `github-actions` `spring-boot` `react` `postgresql` `docker` `c-programming` `python` `tcp-sockets` `binary-protocol` `pid-controller` `real-time-systems` `energy-monitoring` `smart-building`
+
+---
+
+## 🔌 Hardware Simulation Layer
+
+One of the core architectural decisions in the embedded layer is a **hardware abstraction design that allows the same firmware binary to run in three modes** — pure simulation, mixed simulation/hardware, or full hardware — without recompilation.
+
+### Why This Matters
+
+In production embedded development, firmware must be testable before hardware arrives, validable on a CI server with no physical devices, and portable across hardware revisions. This project implements exactly that pattern.
+
+### Three Operating Modes
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    FIRMWARE RUNTIME MODES                       │
+│                                                                 │
+│  Mode 1: Full Simulation (default)                             │
+│  ─────────────────────────────────                             │
+│  Sensor reads → Mathematical model                             │
+│  (sine wave + noise + drift)                                   │
+│  No hardware required · Runs in Docker · CI/CD compatible      │
+│                                                                 │
+│  Mode 2: Hardware Mode (--hardware flag)                       │
+│  ──────────────────────────────────────                        │
+│  Sensor reads → Real DHT22 / VL53L1X / INA219                 │
+│  Same binary, same protocol, same gateway                      │
+│  Just plug in sensors and pass the flag                        │
+│                                                                 │
+│  Mode 3: Mixed (per-sensor override)                           │
+│  ───────────────────────────────────                           │
+│  Zone A → real DHT22                                           │
+│  Zone B → simulated                                            │
+│  Zone C → simulated                                            │
+│  Useful for partial hardware bring-up                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Hardware Abstraction Layer (HAL) Design
+
+```c
+/* hal.h — the interface every sensor implements */
+typedef struct {
+    int   (*init)(const char *config);
+    float (*read_temperature)(void);
+    float (*read_occupancy)(void);
+    float (*read_power)(void);
+    void  (*deinit)(void);
+} SensorHAL_t;
+
+/* Two implementations — same interface */
+extern SensorHAL_t sim_hal;       /* simulation/default  */
+extern SensorHAL_t hardware_hal;  /* real GPIO/I2C/SPI   */
+
+/* Runtime selection via --hardware flag */
+SensorHAL_t *hal = use_hardware ? &hardware_hal : &sim_hal;
+float temp = hal->read_temperature();  /* identical call either way */
+```
+
+### Simulated Sensor Models
+
+Each simulated sensor uses a **physics-inspired mathematical model** rather than random noise — making the simulation data realistic enough to test control algorithms:
+
+| Sensor | Simulation Model | Parameters |
+|:---|:---|:---|
+| **Temperature (DHT22)** | Sine wave + Gaussian noise + slow drift | Base temp, amplitude, period, noise σ |
+| **Occupancy (VL53L1X)** | Step function with schedule-based transitions | Business hours pattern, random arrivals |
+| **Power (INA219)** | Correlated with HVAC state + base load + noise | HVAC watts, idle watts, noise factor |
+| **HVAC State** | PID output clamped to [0%, 100%] | Kp, Ki, Kd, setpoint, anti-windup limit |
+
+### Simulation Code Example
+
+```c
+/* sim_hal.c — temperature simulation */
+float sim_read_temperature(void) {
+    static float drift = 0.0f;
+    time_t now = time(NULL);
+
+    /* Sine wave: 24-hour cycle, ±3°C amplitude */
+    float cycle = sinf(2.0f * M_PI * (now % 86400) / 86400.0f);
+    float base  = config.base_temp + cycle * 3.0f;
+
+    /* Gaussian noise: σ = 0.15°C (DHT22 spec) */
+    float noise = gaussian_noise(0.0f, 0.15f);
+
+    /* Slow drift: ±0.5°C over hours */
+    drift += (rand_float() - 0.5f) * 0.001f;
+    drift  = clamp(drift, -0.5f, 0.5f);
+
+    return base + noise + drift;
+}
+```
+
+### Transport Simulation
+
+The embedded layer also simulates **three communication transports in parallel**, each mapped to a real hardware interface:
+
+| Simulated Transport | Real Hardware Equivalent | Implementation |
+|:---|:---|:---|
+| TCP sockets | Ethernet / Wi-Fi (ESP32) | POSIX `socket()` / `connect()` |
+| MQTT (Mosquitto) | MQTT over TLS on IoT broker | `paho-mqtt` C client |
+| UART named pipes | RS-485 / serial bus | Linux named pipes (`mkfifo`) |
+
+This means the gateway is tested against **all three transport paths simultaneously** in CI — the same paths it would use with real hardware.
+
+### IPC Between Sensor Processes
+
+On multi-core hardware, separate processes handle different sensor types. They share state via **POSIX shared memory + named semaphores** — the same IPC mechanism used in production RTOS environments:
+
+```c
+/* ipc.h — shared state between HVAC and power meter processes */
+typedef struct {
+    float    current_temp;      /* written by temperature sensor  */
+    float    setpoint;          /* written by HVAC controller     */
+    float    heater_pct;        /* written by HVAC → read by power*/
+    float    cooler_pct;        /* written by HVAC → read by power*/
+    uint32_t last_update_ms;
+} SharedState_t;
+
+/* Access pattern */
+sem_wait(shm_sem);              /* acquire lock                   */
+state->heater_pct = pid_out;    /* atomic write                   */
+sem_post(shm_sem);              /* release lock                   */
+```
+
+### Hardware Bring-Up Path
+
+When real hardware is available, switching is a single flag:
+
+```bash
+# Simulation mode (default — no hardware needed)
+./temp_sensor TEMP_A Zone_A 22.0 5
+
+# Hardware mode — reads real DHT22 on GPIO4
+./temp_sensor TEMP_A Zone_A 22.0 5 --hardware
+
+# Docker: same image, same binary, hardware passed through
+docker run --device /dev/i2c-1 ems-sensor --hardware
+```
+
+The gateway, database, backend, and frontend layers are **completely unaware** of which mode the sensor is running in — the binary protocol is identical regardless.
