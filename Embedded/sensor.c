@@ -2,13 +2,18 @@
  * sensor.c - Sensor operations implementation
  *
  * All sensor-specific functions grouped here:
- * - Temperature generation algorithms
+ * - Temperature generation (simulation mode)
  * - Sensor measurement loop
  * - Data packaging and transmission
  *
- * Transport: dual — TCP binary packets + MQTT JSON messages
- *   TCP  → gateway (existing, unchanged)
- *   MQTT → broker  (new, parallel channel)
+ * Reading source (chosen by the --hardware flag):
+ *   SIMULATION -> generate_temperature_reading()
+ *   HARDWARE   -> read_hardware_temperature()  (Raspberry Pi SoC sensor)
+ *
+ * Transports (up to three in parallel):
+ *   TCP  -> gateway (binary packets, always on)
+ *   MQTT -> broker  (JSON, only if a broker is reachable)
+ *   UART -> simulated serial pipe (only if a reader is attached)
  */
 
 #include <stdio.h>
@@ -42,12 +47,20 @@ void execute_sensor_loop(SensorConfig *config, NetworkConnection *conn) {
 
     // Display mode
     if (config->use_hardware) {
-        printf("         Mode: REAL HARDWARE (ESP32/DHT22)\n");
+        printf("         Mode: REAL HARDWARE (Raspberry Pi SoC sensor)\n");
     } else {
         printf("         Mode: SOFTWARE SIMULATION\n");
     }
 
-    // Initialize MQTT client
+    // Initialize hardware first: fail fast if the sensor is not usable
+    if (config->use_hardware) {
+        if (initialize_hardware_sensor() < 0) {
+            printf("[SENSOR] ✗ Hardware initialization failed, stopping\n");
+            return;
+        }
+    }
+
+    // Initialize MQTT client (optional transport)
     MQTTClient mqtt;
     int mqtt_ok = 0;
     if (mqtt_init(&mqtt, config->device_id, config->zone) == 0) {
@@ -80,48 +93,36 @@ void execute_sensor_loop(SensorConfig *config, NetworkConnection *conn) {
     printf("         Press Ctrl+C to stop\n");
     printf("─────────────────────────────────────────────\n");
 
-    // Initialize hardware if needed (COMMENTED - uncomment when ESP32 ready)
-    // if (config->use_hardware) {
-    //     if (initialize_hardware_sensor() < 0) {
-    //         printf("[SENSOR] ✗ Hardware initialization failed\n");
-    //         return;
-    //     }
-    // }
-
     while (1) {
         float temperature;
 
         // Choose sensor source based on configuration
         if (config->use_hardware) {
-            // HARDWARE MODE (function call commented until ESP32 ready)
-            // temperature = read_hardware_temperature();
-
-            // PLACEHOLDER: Simulate hardware for now
             temperature = read_hardware_temperature();
         } else {
-            // SIMULATION MODE (active)
             temperature = generate_temperature_reading(config->base_temp, time_elapsed);
         }
 
-        // Check for sensor error
+        // Check for sensor error (-999 means the read failed)
         if (temperature < -100) {
             printf("[SENSOR] ✗ Sensor read error, skipping this reading\n");
             sleep(config->sampling_rate);
+            time_elapsed += config->sampling_rate;
             continue;
         }
 
-        // Transmit via TCP (existing transport)
+        // Transmit via TCP (primary transport)
         if (transmit_reading(conn, config, temperature) < 0) {
             printf("[SENSOR] ✗ TCP transmission failed, stopping\n");
             break;
         }
 
-        // Publish via MQTT (new parallel transport)
+        // Publish via MQTT (optional parallel transport)
         if (mqtt_ok) {
             mqtt_publish_temperature(&mqtt, temperature);
         }
 
-        // Write via UART simulation (third transport)
+        // Write via UART simulation (optional third transport)
         if (uart_ok) {
             Packet uart_pkt;
             pack_packet(&uart_pkt, config->device_id, temperature, 0);
@@ -131,8 +132,8 @@ void execute_sensor_loop(SensorConfig *config, NetworkConnection *conn) {
         // Log
         packet_count++;
         if (config->use_hardware) {
-            printf("[SENSOR] #%-4d | %.2f°C | %s | [HARDWARE]\n",
-                   packet_count, temperature, config->zone);
+            printf("[SENSOR] #%-4d | %.2f°C | %s | +%ds [HARDWARE]\n",
+                   packet_count, temperature, config->zone, time_elapsed);
         } else {
             printf("[SENSOR] #%-4d | %.2f°C | %s | +%ds [SIM]\n",
                    packet_count, temperature, config->zone, time_elapsed);
@@ -158,7 +159,7 @@ float generate_temperature_reading(float base_temp, int time_elapsed) {
     // Daily temperature cycle (24-hour period)
     float daily_variation = 3.0 * sin(2 * PI * time_elapsed / 86400.0);
 
-    // Random sensor noise
+    // Random sensor noise (fixed seed: same sequence every run, good for repeatable tests)
     static unsigned int seed = 12345;
     seed = (1103515245 * seed + 12345) % (1U << 31);
     float noise = ((float)seed / (1U << 31)) * 1.0 - 0.5;

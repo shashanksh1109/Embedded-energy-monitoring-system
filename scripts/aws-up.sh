@@ -7,7 +7,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-ACCOUNT_ID="993268716712"
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 REGION="us-east-1"
 ECR="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
 CLUSTER="energy-management-cluster"

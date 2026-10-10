@@ -61,6 +61,24 @@ resource "aws_security_group" "ecs" {
     security_groups = [aws_security_group.alb.id]
   }
 
+  # Allow ECS tasks to reach each other on 8080 (gateway)
+  ingress {
+    description = "Allow ECS tasks to communicate internally on port 8080"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    self        = true
+  }
+
+  # Allow NLB TCP traffic (PIC bridge) on 8080
+  ingress {
+    description = "Allow NLB TCP traffic from PIC bridge"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # Allow all outbound
   # Containers need to reach: RDS, ECR, Secrets Manager, CloudWatch
   egress {
@@ -192,15 +210,6 @@ output "backend_target_group_arn" {
 
 # Allow ECS tasks to talk to each other on port 8080
 # Sensor and HVAC/power need to reach the gateway container
-resource "aws_security_group_rule" "ecs_internal_8080" {
-  type                     = "ingress"
-  from_port                = 8080
-  to_port                  = 8080
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.ecs.id
-  source_security_group_id = aws_security_group.ecs.id
-  description              = "Allow ECS tasks to communicate internally on port 8080"
-}
 
 # ─── NETWORK LOAD BALANCER (TCP - for PIC bridge) ─────────────────────
 resource "aws_lb" "gateway_nlb" {
@@ -239,12 +248,3 @@ resource "aws_lb_listener" "gateway_tcp" {
 }
 
 # Allow NLB to reach ECS gateway on port 8080 (for PIC bridge TCP)
-resource "aws_security_group_rule" "ecs_nlb_8080" {
-  type              = "ingress"
-  from_port         = 8080
-  to_port           = 8080
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.ecs.id
-  description       = "Allow NLB TCP traffic from PIC bridge"
-}

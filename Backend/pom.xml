@@ -32,6 +32,7 @@
         <java.version>17</java.version>
         <jjwt.version>0.12.5</jjwt.version>
         <springdoc.version>2.3.0</springdoc.version>
+        <lombok.version>1.18.34</lombok.version>
     </properties>
 
     <!-- ================================================================

@@ -42,3 +42,10 @@ Frontend/node_modules/
 --region
 ecurity group
 Backend/target/
+
+# Embedded build outputs
+Embedded/*.o
+Embedded/temp_sensor
+Embedded/occupancy_sensor
+Embedded/hvac_controller
+Embedded/power_meter

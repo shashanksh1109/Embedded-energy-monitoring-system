@@ -3,52 +3,46 @@
 
 /*
  * sensor_hardware.h - Hardware Sensor Interface
- * 
- * ESP32/Arduino hardware functions for real sensors:
- * - DHT22 temperature/humidity sensor
- * - Sensor initialization and calibration
- * - Health monitoring
- * 
- * NOTE: This code is ESP32-ready but commented out in function calls.
- *       To use: Run with --hardware flag
+ *
+ * Real sensor backend for the Raspberry Pi:
+ * - Reads the SoC temperature sensor via Linux sysfs
+ *   (/sys/class/thermal/thermal_zone0/temp)
+ * - Range-based health check
+ * - Optional calibration offsets
+ *
+ * Used when the program runs with the --hardware flag.
+ * All read functions return -999.0 on error.
  */
-
-// ============================================================================
-// HARDWARE CONFIGURATION
-// ============================================================================
-
-#define DHT_PIN 4           // GPIO pin for DHT22 DATA line
-#define DHT_TYPE 22         // DHT22 (AM2302) sensor
 
 // ============================================================================
 // HARDWARE FUNCTIONS
 // ============================================================================
 
 /**
- * Initialize hardware sensors (DHT22)
- * Must be called before reading sensors
- * 
+ * Check that the hardware sensor is readable and in range.
+ * Must be called before reading sensors.
+ *
  * @return: 0 on success, -1 on failure
  */
 int initialize_hardware_sensor(void);
 
 /**
- * Read temperature from DHT22 sensor
- * 
+ * Read temperature from the Pi SoC sensor.
+ *
  * @return: Temperature in Celsius, -999.0 on error
  */
 float read_hardware_temperature(void);
 
 /**
- * Read humidity from DHT22 sensor
- * 
- * @return: Humidity percentage (0-100%), -999.0 on error
+ * Read humidity. The Pi has no humidity sensor.
+ *
+ * @return: always -999.0
  */
 float read_hardware_humidity(void);
 
 /**
- * Apply calibration offset to sensor reading
- * 
+ * Apply calibration offset to a sensor reading.
+ *
  * @param raw_value: Raw sensor reading
  * @param offset: Calibration offset to apply
  * @return: Calibrated value
@@ -56,10 +50,16 @@ float read_hardware_humidity(void);
 float calibrate_sensor_reading(float raw_value, float offset);
 
 /**
- * Check if sensor is responding correctly
- * 
+ * Check if the sensor is responding with a plausible value (-40..100 C).
+ *
  * @return: 1 if healthy, 0 if failed
  */
 int check_sensor_health(void);
+
+/**
+ * Set calibration offsets applied to future readings.
+ */
+void set_temperature_calibration(float offset);
+void set_humidity_calibration(float offset);
 
 #endif

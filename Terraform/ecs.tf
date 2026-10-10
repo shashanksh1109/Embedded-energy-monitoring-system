@@ -448,9 +448,3 @@ resource "aws_service_discovery_private_dns_namespace" "main" {
   vpc         = aws_vpc.main.id
 }
 
-# ─── ROUTE53 VPC ASSOCIATION ──────────────────────────────────────────
-# Associates the service discovery hosted zone with the VPC used by ECS tasks
-resource "aws_route53_zone_association" "energy_local" {
-  zone_id = aws_service_discovery_private_dns_namespace.main.hosted_zone
-  vpc_id  = aws_vpc.main.id
-}

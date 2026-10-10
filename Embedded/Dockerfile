@@ -1,9 +1,9 @@
 # Stage 1: Build environment (compile C programs)
-FROM gcc:11 AS builder
+FROM ubuntu:22.04 AS builder
 
 # Install make and mosquitto dev library (needed for mqtt_client.h)
 RUN apt-get update && apt-get install -y \
-    make \
+    build-essential \
     libmosquitto-dev \
     && rm -rf /var/lib/apt/lists/*
 

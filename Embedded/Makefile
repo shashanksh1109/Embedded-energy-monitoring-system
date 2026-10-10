@@ -1,5 +1,5 @@
 CC     = gcc
-CFLAGS = -Wall -g -std=c11
+CFLAGS = -Wall -g -std=c11 -D_DEFAULT_SOURCE
 
 # ─── Sensor (Temperature) ─────────────────────────────────────────────────────
 SENSOR_TARGET  = temp_sensor

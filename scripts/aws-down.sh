@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 REGION="us-east-1"
-ACCOUNT_ID="993268716712"
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 
 echo ""
 echo "================================================================"
