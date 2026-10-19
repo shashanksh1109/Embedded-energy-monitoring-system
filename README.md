@@ -40,17 +40,17 @@ Every layer was designed, debugged, and deployed independently:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          PHYSICAL / SIMULATED SENSORS                   │
 │                                                                         │
-│   ┌─────────────────────┐        ┌─────────────────────┐               │
-│   │   SIMULATION MODE   │   OR   │   HARDWARE MODE     │               │
-│   │   (default/CI/CD)   │        │   (--hardware flag) │               │
-│   │                     │        │                     │               │
-│   │  sine wave + noise  │        │  DHT22  (temp)      │               │
-│   │  schedule model     │        │  VL53L1X (occupancy)│               │
-│   │  PID-correlated     │        │  INA219  (power)    │               │
-│   └──────────┬──────────┘        └──────────┬──────────┘               │
-│              └─────────────┬────────────────┘                          │
-│                            │ SensorHAL_t interface                     │
-│                            │ (identical call in either mode)           │
+│   ┌─────────────────────┐        ┌─────────────────────┐                │
+│   │   SIMULATION MODE   │   OR   │   HARDWARE MODE     │                │
+│   │   (default/CI/CD)   │        │   (--hardware flag) │                │
+│   │                     │        │                     │                │
+│   │  sine wave + noise  │        │  DHT22  (temp)      │                │
+│   │  schedule model     │        │  VL53L1X (occupancy)│                │
+│   │  PID-correlated     │        │  INA219  (power)    │                │
+│   └──────────┬──────────┘        └──────────┬──────────┘                │
+│              └─────────────┬────────────────┘                           │
+│                            │ SensorHAL_t interface                      │
+│                            │ (identical call in either mode)            │
 └────────────────────────────┼────────────────────────────────────────────┘
                              │
               ┌──────────────┼──────────────┐
@@ -60,15 +60,15 @@ Every layer was designed, debugged, and deployed independently:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      EMBEDDED LAYER (C11)                               │
 │                                                                         │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                  │
-│  │  Zone A     │   │  Zone B     │   │  Zone C     │                  │
-│  │ temp_sensor │   │ temp_sensor │   │ temp_sensor │                  │
-│  │ + occupancy │   │ + occupancy │   │ + occupancy │                  │
-│  │ + power     │   │ + power     │   │ + power     │                  │
-│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                  │
-│         │                 │                  │                         │
-│         └─────── PID HVAC Controller ────────┘                         │
-│                  (Ziegler-Nichols tuned, anti-windup)                  │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                    │
+│  │  Zone A     │   │  Zone B     │   │  Zone C     │                    │
+│  │ temp_sensor │   │ temp_sensor │   │ temp_sensor │                    │
+│  │ + occupancy │   │ + occupancy │   │ + occupancy │                    │
+│  │ + power     │   │ + power     │   │ + power     │                    │
+│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                    │
+│         │                 │                  │                          │
+│         └─────── PID HVAC Controller ────────┘                          │
+│                  (Ziegler-Nichols tuned, anti-windup)                   │
 └───────────┬─────────────────────────────────────────────────────────────┘
             │
             │  Three parallel transports simultaneously
@@ -80,38 +80,38 @@ Every layer was designed, debugged, and deployed independently:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      GATEWAY LAYER (Python)                             │
 │                                                                         │
-│  Multi-Threaded TCP Server                                             │
-│  ├── Binary Parser (V1/V2 auto-detection + checksum validation)        │
-│  ├── Analytics Engine (mean/stddev/min/max per zone every 60s)         │
-│  ├── HVAC Orchestrator (threshold-based, writes directly to DB)        │
-│  ├── MQTT Subscriber                                                   │
-│  └── UART Reader                                                       │
+│  Multi-Threaded TCP Server                                              │
+│  ├── Binary Parser (V1/V2 auto-detection + checksum validation)         │
+│  ├── Analytics Engine (mean/stddev/min/max per zone every 60s)          │
+│  ├── HVAC Orchestrator (threshold-based, writes directly to DB)         │
+│  ├── MQTT Subscriber                                                    │
+│  └── UART Reader                                                        │
 └───────────────────────────┬─────────────────────────────────────────────┘
                             │ psycopg2
                             ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      DATABASE LAYER (PostgreSQL)                        │
 │                                                                         │
-│  10 tables: zones · devices · temperature_readings                     │
-│  occupancy_readings · hvac_state · power_readings                      │
-│  analytics_snapshots · orchestration_events · schedules                │
-│  ml_predictions  —  UUID PKs · TIMESTAMPTZ · 90-day retention         │
+│  10 tables: zones · devices · temperature_readings                      │
+│  occupancy_readings · hvac_state · power_readings                       │
+│  analytics_snapshots · orchestration_events · schedules                 │
+│  ml_predictions  —  UUID PKs · TIMESTAMPTZ · 90-day retention           │
 └───────────────────────────┬─────────────────────────────────────────────┘
                             │ JPA/Hibernate
                             ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      BACKEND LAYER (Java Spring Boot)                   │
 │                                                                         │
-│  7 REST controllers · JWT authentication (HS512)                       │
-│  WebSocket live data push · Swagger/OpenAPI docs · Port 8081           │
+│  7 REST controllers · JWT authentication (HS512)                        │
+│  WebSocket live data push · Swagger/OpenAPI docs · Port 8081            │
 └───────────────────────────┬─────────────────────────────────────────────┘
                             │ Axios HTTP + STOMP WebSocket
                             ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      FRONTEND LAYER (React + Vite)                      │
 │                                                                         │
-│  Dashboard · Zone Overview · Charts · Analytics · Schedules            │
-│  Real-time updates every 5s · Recharts · Tailwind dark theme          │
+│  Dashboard · Zone Overview · Charts · Analytics · Schedules             │
+│  Real-time updates every 5s · Recharts · Tailwind dark theme            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,7 +128,7 @@ Every layer was designed, debugged, and deployed independently:
 │    ├── Build + test gateway (pytest)                    │
 │    ├── Push Docker images → ECR                         │
 │    ├── Deploy ECS services (force-new-deployment)       │
-│    └── Build React → sync to S3                        │
+│    └── Build React → sync to S3                         │
 └─────────────────┬───────────────────────────────────────┘
                   ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -136,25 +136,25 @@ Every layer was designed, debugged, and deployed independently:
 │                                                         │
 │  VPC                                                    │
 │  ├── Public Subnet                                      │
-│  │     └── ALB → /api/* → ECS backend                 │
+│  │     └── ALB → /api/* → ECS backend                   │
 │  │                                                      │
 │  ├── Private Subnet                                     │
-│  │     ├── ECS Fargate Cluster                         │
-│  │     │     ├── energy-management-backend  (Spring)   │
-│  │     │     ├── energy-management-gateway  (Python)   │
-│  │     │     ├── energy-management-sensor   (C binary) │
-│  │     │     └── energy-management-power    (C binary) │
-│  │     │                                               │
-│  │     └── RDS PostgreSQL (db.t3.micro)               │
+│  │     ├── ECS Fargate Cluster                          │
+│  │     │     ├── energy-management-backend  (Spring)    │
+│  │     │     ├── energy-management-gateway  (Python)    │
+│  │     │     ├── energy-management-sensor   (C binary)  │
+│  │     │     └── energy-management-power    (C binary)  │
+│  │     │                                                │
+│  │     └── RDS PostgreSQL (db.t3.micro)                 │
 │  │                                                      │
-│  └── S3                                                │
-│        └── React frontend (static website hosting)     │
+│  └── S3                                                 │
+│        └── React frontend (static website hosting)      │
 │                                                         │
-│  ECR — 5 Docker image repositories                     │
-│  CloudWatch — structured logs for all 5 services       │
-│  Secrets Manager — DB credentials + JWT secret         │
-│  Service Discovery — gateway.energy.local DNS          │
-│  IAM — least-privilege task roles                      │
+│  ECR — 5 Docker image repositories                      │
+│  CloudWatch — structured logs for all 5 services        │
+│  Secrets Manager — DB credentials + JWT secret          │
+│  Service Discovery — gateway.energy.local DNS           │
+│  IAM — least-privilege task roles                       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -486,24 +486,24 @@ In production embedded development, firmware must be testable before hardware ar
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FIRMWARE RUNTIME MODES                       │
 │                                                                 │
-│  Mode 1: Full Simulation (default)                             │
-│  ─────────────────────────────────                             │
-│  Sensor reads → Mathematical model                             │
-│  (sine wave + noise + drift)                                   │
-│  No hardware required · Runs in Docker · CI/CD compatible      │
+│  Mode 1: Full Simulation (default)                              │
+│  ─────────────────────────────────                              │
+│  Sensor reads → Mathematical model                              │
+│  (sine wave + noise + drift)                                    │
+│  No hardware required · Runs in Docker · CI/CD compatible       │
 │                                                                 │
-│  Mode 2: Hardware Mode (--hardware flag)                       │
-│  ──────────────────────────────────────                        │
-│  Sensor reads → Real DHT22 / VL53L1X / INA219                 │
-│  Same binary, same protocol, same gateway                      │
-│  Just plug in sensors and pass the flag                        │
+│  Mode 2: Hardware Mode (--hardware flag)                        │
+│  ──────────────────────────────────────                         │
+│  Sensor reads → Real DHT22 / VL53L1X / INA219                   │
+│  Same binary, same protocol, same gateway                       │
+│  Just plug in sensors and pass the flag                         │
 │                                                                 │
-│  Mode 3: Mixed (per-sensor override)                           │
-│  ───────────────────────────────────                           │
-│  Zone A → real DHT22                                           │
-│  Zone B → simulated                                            │
-│  Zone C → simulated                                            │
-│  Useful for partial hardware bring-up                          │
+│  Mode 3: Mixed (per-sensor override)                            │
+│  ───────────────────────────────────                            │
+│  Zone A → real DHT22                                            │
+│  Zone B → simulated                                             │
+│  Zone C → simulated                                             │
+│  Useful for partial hardware bring-up                           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
