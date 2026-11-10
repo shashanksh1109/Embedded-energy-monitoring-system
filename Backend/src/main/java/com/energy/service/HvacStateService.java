@@ -11,15 +11,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * HvacStateService - business logic for HVAC state
+ */
 @Service
 @RequiredArgsConstructor
 public class HvacStateService {
 
     private final HvacStateRepository hvacStateRepository;
 
-    /**
-     * Get all HVAC states for a zone, newest first.
-     */
     @Transactional(readOnly = true)
     public List<HvacStateResponse> getStatesForZone(String zoneName) {
         return hvacStateRepository
@@ -29,9 +29,6 @@ public class HvacStateService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get HVAC states for a zone within a time range.
-     */
     @Transactional(readOnly = true)
     public List<HvacStateResponse> getStatesForZoneBetween(
         String zoneName,
@@ -39,11 +36,8 @@ public class HvacStateService {
         OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
-            throw new RuntimeException(
-                "Invalid time range: 'from' must be before 'to'"
-            );
+            throw new RuntimeException("Invalid time range: 'from' must be before 'to'");
         }
-
         return hvacStateRepository
             .findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(zoneName, from, to)
             .stream()
@@ -51,10 +45,6 @@ public class HvacStateService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get the latest HVAC state for a zone.
-     * Used by dashboard to show current heating/cooling status.
-     */
     @Transactional(readOnly = true)
     public HvacStateResponse getLatestForZone(String zoneName) {
         return hvacStateRepository
@@ -63,9 +53,6 @@ public class HvacStateService {
             .orElse(null);
     }
 
-    /**
-     * Get last 20 HVAC states for sparkline chart.
-     */
     @Transactional(readOnly = true)
     public List<HvacStateResponse> getRecentStates(String zoneName) {
         return hvacStateRepository
@@ -75,14 +62,6 @@ public class HvacStateService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get current HVAC mode for a zone.
-     * Returns "HEATING", "COOLING", or "IDLE".
-     *
-     * Same pattern as isZoneOccupied in OccupancyService —
-     * returns a simple String instead of a full DTO.
-     * Used by dashboard status badge.
-     */
     @Transactional(readOnly = true)
     public String getCurrentMode(String zoneName) {
         return hvacStateRepository
@@ -96,23 +75,8 @@ public class HvacStateService {
     }
 
     /**
-     * Get HVAC usage summary for a zone within a time range.
-     *
-     * NEW CONCEPT: building and returning a Map instead of a DTO.
-     *
-     * This method calls three repository queries and combines
-     * the results into one Map with meaningful keys.
-     *
-     * Why a Map and not a DTO?
-     * This is a one-off summary response — creating a dedicated
-     * DTO class for it would be overkill. A Map<String, Object>
-     * is flexible enough and Spring serializes it to JSON cleanly:
-     * {
-     *   "avgHeaterPct": 42.5,
-     *   "avgCoolerPct": 12.3,
-     *   "heatingReadings": 245,
-     *   "coolingReadings": 87
-     * }
+     * Usage summary for a time range. JSON keys are unchanged.
+     * The heating/cooling counts now come from COUNT queries in the database.
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getUsageSummary(
@@ -121,33 +85,23 @@ public class HvacStateService {
         OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
-            throw new RuntimeException(
-                "Invalid time range: 'from' must be before 'to'"
-            );
+            throw new RuntimeException("Invalid time range: 'from' must be before 'to'");
         }
 
-        // Get average heater and cooler usage from Object[] query
-        // Object[] layout: [0] = avgHeater, [1] = avgCooler
-        Object[] avgUsage = hvacStateRepository
+        // [0] = avg heater %, [1] = avg cooler %. AVG over zero rows is NULL, so default to 0.
+        Object[] avg = hvacStateRepository
             .findAverageUsage(zoneName, from, to)
             .orElse(new Object[]{0.0, 0.0});
+        Object avgHeater = avg.length > 0 && avg[0] != null ? avg[0] : 0.0;
+        Object avgCooler = avg.length > 1 && avg[1] != null ? avg[1] : 0.0;
 
-        // Count how many readings were actively heating
-        int heatingCount = hvacStateRepository
-            .findHeatingStates(zoneName, from, to)
-            .size();
+        long heatingCount = hvacStateRepository.countHeatingStates(zoneName, from, to);
+        long coolingCount = hvacStateRepository.countCoolingStates(zoneName, from, to);
 
-        // Count how many readings were actively cooling
-        int coolingCount = hvacStateRepository
-            .findCoolingStates(zoneName, from, to)
-            .size();
-
-        // Build and return the summary map
-        // Map.of() creates an immutable map with key-value pairs
         return Map.of(
             "zoneName",        zoneName,
-            "avgHeaterPct",    avgUsage[0],
-            "avgCoolerPct",    avgUsage[1],
+            "avgHeaterPct",    avgHeater,
+            "avgCoolerPct",    avgCooler,
             "heatingReadings", heatingCount,
             "coolingReadings", coolingCount,
             "from",            from,
@@ -155,19 +109,14 @@ public class HvacStateService {
         );
     }
 
-    /**
-     * Get readings for the last N hours.
-     */
     @Transactional(readOnly = true)
     public List<HvacStateResponse> getStatesForLastHours(String zoneName, int hours) {
         OffsetDateTime to = OffsetDateTime.now(java.time.ZoneOffset.UTC);
         OffsetDateTime from = to.minusHours(hours);
-
         return hvacStateRepository
             .findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(zoneName, from, to)
             .stream()
             .map(HvacStateResponse::from)
             .collect(Collectors.toList());
     }
-
 }
