@@ -12,7 +12,19 @@ Handles:
 import socket
 import threading
 import time
+from datetime import datetime, timezone
 from protocol import PacketParser
+
+
+# ------------------------------------------------------------------
+# HVAC decision memory, shared by all client threads.
+# zone_id -> (last mode written, monotonic time it was written)
+# Used to write hvac_state only when the mode CHANGES, plus a periodic
+# heartbeat so the dashboard's "latest" HVAC row stays fresh.
+# ------------------------------------------------------------------
+_last_hvac      = {}
+_last_hvac_lock = threading.Lock()
+HVAC_HEARTBEAT_SEC = 60
 
 
 class ClientHandler:
@@ -103,53 +115,70 @@ class ClientHandler:
             self.socket.close()
             print(f"[NETWORK] Client disconnected: {self.address}")
 
-    def _check_temperature_and_trigger(self, packet):
-        """Analyze temperature and trigger HVAC if needed.
-        In ECS we cannot spawn subprocesses — write hvac_state and
-        orchestration_events directly to the DB instead.
-        """
-        temp      = packet['value']
-        device_id = packet['device_id']
-        zone_suffix = device_id.split('_')[1] if '_' in device_id else 'A'
-        hvac_device = f'HVAC_{zone_suffix}'
+    def _hvac_device_for_zone(self, zone_id):
+        """Find the registered HVAC device in the same zone (e.g. 'HVAC_A')."""
+        for thing_name, dev in self.db._device_cache.items():
+            if dev['zone_id'] == zone_id and thing_name.startswith('HVAC'):
+                return thing_name
+        return None
 
+    def _check_temperature_and_trigger(self, packet):
+        """Decide HEATING / COOLING / IDLE from a temperature packet.
+
+        In ECS we cannot spawn subprocesses, so the decision is written to
+        hvac_state (and orchestration_events) directly. To avoid a DB write
+        for every packet, hvac_state is written only when the mode changes,
+        plus once every HVAC_HEARTBEAT_SEC so the latest row stays current.
+        """
         if not self.db:
             return
+
+        temp      = packet['value']
+        device_id = packet['device_id']
+
         zone_id = self.db._get_zone_id(device_id)
         if not zone_id:
             return
 
+        hvac_device = self._hvac_device_for_zone(zone_id)
+        if not hvac_device:
+            return                       # no HVAC registered in this zone
+
+        # Same clock as the temperature reading that caused the decision
+        recorded_at = datetime.fromtimestamp(packet['timestamp'], tz=timezone.utc)
+        target      = self.orch_config.temp_target
+
         if self.orch_config.is_temperature_too_low(temp):
-            print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT: {temp:.1f}C below {self.orch_config.temp_threshold_low}C → HEATING")
-            self.db.write_hvac_state_direct(
-                zone_id=zone_id, device_id=hvac_device,
-                heater_pct=80.0, cooler_pct=0.0,
-                current_temp=temp, setpoint=self.orch_config.temp_target
-            )
-            self.db.write_orchestration_event(
-                zone_id=zone_id, event_type='HVAC_HEATING',
-                description=f'Temp {temp:.1f}C below {self.orch_config.temp_threshold_low}C',
-                temperature=temp
-            )
-
+            mode, heater, cooler = 'HEATING', 80.0, 0.0
+            reason = f'Temp {temp:.1f}C below {self.orch_config.temp_threshold_low}C'
         elif self.orch_config.is_temperature_too_high(temp):
-            print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT: {temp:.1f}C above {self.orch_config.temp_threshold_high}C → COOLING")
-            self.db.write_hvac_state_direct(
-                zone_id=zone_id, device_id=hvac_device,
-                heater_pct=0.0, cooler_pct=80.0,
-                current_temp=temp, setpoint=self.orch_config.temp_target
-            )
-            self.db.write_orchestration_event(
-                zone_id=zone_id, event_type='HVAC_COOLING',
-                description=f'Temp {temp:.1f}C above {self.orch_config.temp_threshold_high}C',
-                temperature=temp
-            )
+            mode, heater, cooler = 'COOLING', 0.0, 80.0
+            reason = f'Temp {temp:.1f}C above {self.orch_config.temp_threshold_high}C'
+        else:
+            mode, heater, cooler = 'IDLE', 0.0, 0.0
+            reason = f'Temp {temp:.1f}C within range'
 
-        elif self.orch_config.is_temperature_stable(temp):
-            self.db.write_hvac_state_direct(
-                zone_id=zone_id, device_id=hvac_device,
-                heater_pct=0.0, cooler_pct=0.0,
-                current_temp=temp, setpoint=self.orch_config.temp_target
+        now = time.monotonic()
+        with _last_hvac_lock:
+            last_mode, last_time = _last_hvac.get(zone_id, (None, 0.0))
+            changed   = (mode != last_mode)
+            heartbeat = (now - last_time) >= HVAC_HEARTBEAT_SEC
+            if not (changed or heartbeat):
+                return                   # same mode, written recently: skip
+            _last_hvac[zone_id] = (mode, now)
+
+        self.db.write_hvac_state_direct(
+            zone_id=zone_id, device_id=hvac_device,
+            heater_pct=heater, cooler_pct=cooler,
+            current_temp=temp, setpoint=target,
+            recorded_at=recorded_at,
+        )
+
+        if changed and mode != 'IDLE':
+            print(f"\n[ORCHESTRATOR] {reason} -> {mode}")
+            self.db.write_orchestration_event(
+                zone_id=zone_id, event_type=f'HVAC_{mode}',
+                description=reason, temperature=temp,
             )
 
 
