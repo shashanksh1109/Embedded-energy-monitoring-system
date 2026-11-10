@@ -60,7 +60,7 @@ function ZonePanel({ zone }) {
         setOcc(o)
         setHvac(h)
         setPower(p)
-        if (t) setTempHistory(prev => [...prev.slice(-19), { v: t.valueC }])
+        if (t) setTempHistory(prev => [...prev.slice(-19), { v: t.temperatureC }])
       } finally {
         setLoading(false)
       }
