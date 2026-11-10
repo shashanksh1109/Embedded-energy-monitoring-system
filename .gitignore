@@ -51,3 +51,6 @@ Embedded/hvac_controller
 Embedded/power_meter
 
 Gateway/.venv/
+
+# Local environment values
+.env

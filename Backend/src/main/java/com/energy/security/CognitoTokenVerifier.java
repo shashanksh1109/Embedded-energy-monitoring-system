@@ -1,0 +1,106 @@
+package com.energy.security;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * CognitoTokenVerifier - checks access tokens issued by Amazon Cognito and
+ * finds which organization the user belongs to.
+ *
+ * Verification (done by Spring Security's JwtDecoder):
+ *   - signature: Cognito signs tokens with its private key (RS256); the
+ *     matching public keys are downloaded from the issuer's JWKS URL
+ *   - expiry:    the token must not be expired
+ *   - issuer:    "iss" must be exactly our user pool
+ * Extra checks done here:
+ *   - token_use must be "access" (not an ID token)
+ *   - client_id must be OUR app client
+ *
+ * Configured by two environment variables. If either is empty, Cognito
+ * login is simply switched off (the built-in admin login keeps working).
+ *   COGNITO_ISSUER     e.g. https://cognito-idp.us-east-1.amazonaws.com/us-east-1_AbC123
+ *   COGNITO_CLIENT_ID  the app client ID from Terraform
+ */
+@Component
+public class CognitoTokenVerifier {
+
+    private final String issuer;
+    private final String clientId;
+    private final JdbcTemplate jdbc;
+
+    /** Created on first use, so the backend still starts if Cognito is unreachable. */
+    private volatile JwtDecoder decoder;
+
+    public CognitoTokenVerifier(
+        @Value("${COGNITO_ISSUER:}") String issuer,
+        @Value("${COGNITO_CLIENT_ID:}") String clientId,
+        JdbcTemplate jdbc
+    ) {
+        this.issuer = issuer;
+        this.clientId = clientId;
+        this.jdbc = jdbc;
+    }
+
+    public boolean isEnabled() {
+        return !issuer.isBlank() && !clientId.isBlank();
+    }
+
+    /**
+     * Returns the verified token, or null if it is not a valid Cognito
+     * access token for our app.
+     */
+    public Jwt verify(String token) {
+        if (!isEnabled()) {
+            return null;
+        }
+        try {
+            Jwt jwt = decoder().decode(token);          // signature + expiry + issuer
+            if (!"access".equals(jwt.getClaimAsString("token_use"))) {
+                return null;
+            }
+            if (!clientId.equals(jwt.getClaimAsString("client_id"))) {
+                return null;
+            }
+            return jwt;
+        } catch (JwtException | IllegalArgumentException | IllegalStateException e) {
+            return null;
+        }
+    }
+
+    /**
+     * The organization a user belongs to (their oldest membership), or null
+     * if they belong to none. memberships has no row-level security, so this
+     * works before the request's organization is known.
+     */
+    public UUID findOrgId(String userSub) {
+        List<UUID> ids = jdbc.query(
+            "SELECT org_id FROM memberships WHERE user_id = ?::uuid ORDER BY created_at LIMIT 1",
+            (rs, rowNum) -> rs.getObject(1, UUID.class),
+            userSub
+        );
+        return ids.isEmpty() ? null : ids.get(0);
+    }
+
+    private JwtDecoder decoder() {
+        JwtDecoder d = decoder;
+        if (d == null) {
+            synchronized (this) {
+                d = decoder;
+                if (d == null) {
+                    // Reads <issuer>/.well-known/openid-configuration to find the public keys
+                    d = JwtDecoders.fromIssuerLocation(issuer);
+                    decoder = d;
+                }
+            }
+        }
+        return d;
+    }
+}

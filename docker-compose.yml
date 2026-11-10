@@ -122,6 +122,9 @@ services:
       - DB_USER=ems_api
       - DB_PASSWORD=ems_api_dev
       - JWT_SECRET=energy-monitoring-super-secret-key-change-in-production
+      # Amazon Cognito (values come from the .env file next to this file)
+      - COGNITO_ISSUER=${COGNITO_ISSUER:-}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID:-}
       - SPRING_PROFILES_ACTIVE=docker
 
 volumes:
