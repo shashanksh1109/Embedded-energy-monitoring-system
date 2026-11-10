@@ -62,6 +62,7 @@ CREATE TABLE zones (
     org_id       UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     building_id  UUID        NOT NULL,
     name         VARCHAR(64) NOT NULL,
+    description  VARCHAR(255),
     capacity     INTEGER     NOT NULL DEFAULT 0 CHECK (capacity >= 0),
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (building_id, name),         -- "Room 1" can exist in many buildings
@@ -316,10 +317,10 @@ VALUES ('00000000-0000-0000-0000-0000000000b1',
         'Demo Building', 'Boston, MA')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO zones (org_id, building_id, name, capacity) VALUES
-    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', 'Zone_A', 20),
-    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', 'Zone_B', 10),
-    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', 'Zone_C',  5)
+INSERT INTO zones (org_id, building_id, name, description, capacity) VALUES
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', 'Zone_A', 'Conference Room',  20),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', 'Zone_B', 'Executive Office', 10),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', 'Zone_C', 'Basement Storage',  5)
 ON CONFLICT (building_id, name) DO NOTHING;
 
 -- Devices: thing_name = the ID the sensor sends (TEMP_A, TEMP_PI, ...).
