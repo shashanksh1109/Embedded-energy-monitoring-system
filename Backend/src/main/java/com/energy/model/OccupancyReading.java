@@ -11,21 +11,21 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * One HVAC state record: heater/cooler output and the temperature it reacted to.
+ * One occupancy reading: how many people are in the zone.
  *
- * Maps to table: hvac_state
+ * Maps to table: occupancy_readings
  *
  * Marked Immutable: the backend only READS readings (the gateway writes them),
  * so Hibernate skips change-tracking for these objects.
  */
 @Entity
-@Table(name = "hvac_state")
+@Table(name = "occupancy_readings")
 @Immutable
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HvacState {
+public class OccupancyReading {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -44,17 +44,12 @@ public class HvacState {
     @JoinColumn(name = "zone_id", nullable = false)
     private Zone zone;
 
-    @Column(name = "heater_pct", nullable = false)
-    private Float heaterPct;
+    @Column(name = "occupancy_count", nullable = false)
+    private Integer occupancyCount;
 
-    @Column(name = "cooler_pct", nullable = false)
-    private Float coolerPct;
-
-    @Column(name = "current_temp", nullable = false)
-    private Float currentTemp;
-
-    @Column(name = "setpoint", nullable = false)
-    private Float setpoint;
+    /** Distance from a time-of-flight sensor; NULL for other occupancy sensors. */
+    @Column(name = "distance_mm")
+    private Float distanceMm;
 
     /** When the device measured it (device clock). */
     @Column(name = "recorded_at", nullable = false)
