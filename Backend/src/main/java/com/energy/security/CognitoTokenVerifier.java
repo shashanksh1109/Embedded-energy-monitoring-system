@@ -1,5 +1,7 @@
 package com.energy.security;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -8,6 +10,11 @@ import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Component;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,6 +45,11 @@ public class CognitoTokenVerifier {
 
     /** Created on first use, so the backend still starts if Cognito is unreachable. */
     private volatile JwtDecoder decoder;
+
+    private final HttpClient http = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(5))
+        .build();
+    private final ObjectMapper json = new ObjectMapper();
 
     public CognitoTokenVerifier(
         @Value("${COGNITO_ISSUER:}") String issuer,
@@ -87,6 +99,44 @@ public class CognitoTokenVerifier {
             userSub
         );
         return ids.isEmpty() ? null : ids.get(0);
+    }
+
+    /**
+     * The user's email address, asked from Cognito with the user's own access
+     * token (Cognito's GetUser API). Access tokens don't contain the email,
+     * and we must not trust an email address sent by the browser.
+     * Needs no AWS credentials: the access token itself is the permission.
+     * Returns null if Cognito can't be reached or refuses the token.
+     */
+    public String fetchEmail(String accessToken) {
+        try {
+            URI issuerUri = URI.create(issuer);
+            URI endpoint = URI.create(issuerUri.getScheme() + "://" + issuerUri.getHost() + "/");
+            String body = json.writeValueAsString(java.util.Map.of("AccessToken", accessToken));
+
+            HttpRequest request = HttpRequest.newBuilder(endpoint)
+                .timeout(Duration.ofSeconds(5))
+                .header("Content-Type", "application/x-amz-json-1.1")
+                .header("X-Amz-Target", "AWSCognitoIdentityProviderService.GetUser")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+            HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return null;
+            }
+            for (JsonNode attr : json.readTree(response.body()).path("UserAttributes")) {
+                if ("email".equals(attr.path("Name").asText())) {
+                    return attr.path("Value").asText();
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            return null;
+        }
     }
 
     private JwtDecoder decoder() {
