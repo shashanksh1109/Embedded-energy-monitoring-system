@@ -8,6 +8,10 @@ import lombok.NoArgsConstructor;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * JSON sent to the frontend for one HVAC state.
+ * "mode" is derived here so the dashboard doesn't have to compare percentages.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -15,7 +19,7 @@ import java.util.UUID;
 public class HvacStateResponse {
 
     private UUID id;
-    private String deviceId;
+    private String deviceId;          // thing name, e.g. "HVAC_A"
     private String zoneName;
     private Float heaterPct;
     private Float coolerPct;
@@ -23,13 +27,10 @@ public class HvacStateResponse {
     private Float setpoint;
     private OffsetDateTime recordedAt;
 
-    // Convenience field — tells the dashboard at a glance
-    // what mode the HVAC is in without checking both percentages
-    // "HEATING", "COOLING", or "IDLE"
+    /** "HEATING", "COOLING" or "IDLE" */
     private String mode;
 
     public static HvacStateResponse from(com.energy.model.HvacState state) {
-        // Determine mode from heater/cooler values
         String mode;
         if (state.getHeaterPct() > 0) {
             mode = "HEATING";
@@ -41,7 +42,7 @@ public class HvacStateResponse {
 
         return HvacStateResponse.builder()
             .id(state.getId())
-            .deviceId(state.getDeviceId())
+            .deviceId(state.getDevice().getThingName())
             .zoneName(state.getZone().getName())
             .heaterPct(state.getHeaterPct())
             .coolerPct(state.getCoolerPct())
@@ -51,5 +52,4 @@ public class HvacStateResponse {
             .mode(mode)
             .build();
     }
-
 }

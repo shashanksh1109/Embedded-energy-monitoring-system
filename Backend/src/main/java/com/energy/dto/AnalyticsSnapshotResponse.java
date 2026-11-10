@@ -1,16 +1,20 @@
 package com.energy.dto;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/** JSON sent to the frontend for one analytics snapshot (one zone, one metric, one window). */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class AnalyticsSnapshotResponse {
+
     private UUID id;
     private String zoneName;
     private String metricType;
@@ -19,6 +23,7 @@ public class AnalyticsSnapshotResponse {
     private Float minVal;
     private Float maxVal;
     private Integer sampleCount;
+    private OffsetDateTime windowStart;
     private OffsetDateTime snapshotAt;
     private Float range;
 
@@ -32,6 +37,7 @@ public class AnalyticsSnapshotResponse {
             .minVal(snapshot.getMinVal())
             .maxVal(snapshot.getMaxVal())
             .sampleCount(snapshot.getSampleCount())
+            .windowStart(snapshot.getWindowStart())
             .snapshotAt(snapshot.getSnapshotAt())
             .range(snapshot.getMaxVal() - snapshot.getMinVal())
             .build();
