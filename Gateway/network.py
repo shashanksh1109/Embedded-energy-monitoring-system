@@ -49,6 +49,33 @@ _last_hvac_lock = threading.Lock()
 HVAC_HEARTBEAT_SEC = 60
 
 
+# ------------------------------------------------------------------
+# Who owns the HVAC state?
+#
+# If a zone has a real HVAC controller reporting its own state (V2
+# HVAC_STATE packets), THAT is the truth: it is what the equipment is
+# actually doing. The gateway's own HEATING/COOLING/IDLE decision is only
+# a fallback for zones whose controller hasn't reported recently.
+#
+# zone_id -> monotonic time of the last HVAC_STATE packet from a device
+# ------------------------------------------------------------------
+_device_hvac_seen  = {}
+HVAC_DEVICE_FRESH_SEC = 30
+
+
+def note_device_hvac_report(zone_id):
+    """Remember that a real HVAC controller in this zone just reported."""
+    with _last_hvac_lock:
+        _device_hvac_seen[zone_id] = time.monotonic()
+
+
+def device_reported_recently(zone_id):
+    """True if this zone's HVAC controller reported within HVAC_DEVICE_FRESH_SEC."""
+    with _last_hvac_lock:
+        seen = _device_hvac_seen.get(zone_id)
+    return seen is not None and (time.monotonic() - seen) < HVAC_DEVICE_FRESH_SEC
+
+
 class ClientHandler:
     """Handles individual client connection"""
 
@@ -121,6 +148,12 @@ class ClientHandler:
                     if self.db:
                         self.db.write_packet(packet)
 
+                    # A real HVAC controller reported its state: it owns this zone's HVAC
+                    if packet['type'] == PACKET_TYPE_HVAC_STATE and self.db:
+                        hvac_zone = self.db._get_zone_id(packet['device_id'])
+                        if hvac_zone:
+                            note_device_hvac_report(hvac_zone)
+
                     # Smart orchestration - trigger HVAC if temperature packet
                     if packet['type'] == 0:  # Temperature packet
                         self._check_temperature_and_trigger(packet)
@@ -141,6 +174,10 @@ class ClientHandler:
     def _check_temperature_and_trigger(self, packet):
         """Decide HEATING / COOLING / IDLE from a temperature packet.
 
+        Only used as a FALLBACK: if this zone's HVAC controller has reported
+        its own state recently, the controller is the source of truth and
+        nothing is written here.
+
         In ECS we cannot spawn subprocesses, so the decision is written to
         hvac_state (and orchestration_events) directly. To avoid a DB write
         for every packet, hvac_state is written only when the mode changes,
@@ -159,6 +196,9 @@ class ClientHandler:
         hvac_device = self._hvac_device_for_zone(zone_id)
         if not hvac_device:
             return                       # no HVAC registered in this zone
+
+        if device_reported_recently(zone_id):
+            return                       # the real controller owns HVAC state here
 
         # Same clock as the temperature reading that caused the decision
         recorded_at = datetime.fromtimestamp(packet['timestamp'], tz=timezone.utc)

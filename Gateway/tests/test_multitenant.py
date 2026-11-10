@@ -211,6 +211,7 @@ def make_handler(db):
 
 def test_hvac_written_only_on_mode_change_and_uses_registry_device():
     network._last_hvac.clear()
+    network._device_hvac_seen.clear()
     db = RecordingDB(new_writer())
     handler = make_handler(db)
 
@@ -226,8 +227,38 @@ def test_hvac_written_only_on_mode_change_and_uses_registry_device():
 
 def test_hvac_uses_the_temperature_packets_timestamp():
     network._last_hvac.clear()
+    network._device_hvac_seen.clear()
     db = RecordingDB(new_writer())
     handler = make_handler(db)
     handler._check_temperature_and_trigger(
         {'device_id': 'TEMP_A', 'timestamp': 1760000000, 'value': 30.0})
     assert int(db.hvac_writes[0]['recorded_at'].timestamp()) == 1760000000
+
+
+def test_gateway_does_not_override_a_reporting_hvac_controller():
+    network._last_hvac.clear()
+    network._device_hvac_seen.clear()
+    db = RecordingDB(new_writer())
+    handler = make_handler(db)
+
+    network.note_device_hvac_report('zone-a')      # HVAC_A just sent its own state
+    handler._check_temperature_and_trigger(
+        {'device_id': 'TEMP_A', 'timestamp': 1760000000, 'value': 30.0})
+
+    assert db.hvac_writes == []                    # the controller owns the zone
+    assert db.events == []
+
+
+def test_gateway_takes_over_when_the_controller_goes_quiet():
+    network._last_hvac.clear()
+    network._device_hvac_seen.clear()
+    db = RecordingDB(new_writer())
+    handler = make_handler(db)
+
+    # controller last reported longer ago than HVAC_DEVICE_FRESH_SEC
+    network._device_hvac_seen['zone-a'] = (
+        time.monotonic() - network.HVAC_DEVICE_FRESH_SEC - 1)
+    handler._check_temperature_and_trigger(
+        {'device_id': 'TEMP_A', 'timestamp': 1760000000, 'value': 30.0})
+
+    assert len(db.hvac_writes) == 1                # fallback decision written
