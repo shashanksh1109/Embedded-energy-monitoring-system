@@ -10,6 +10,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./Database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      # Runs after schema.sql (alphabetical order): local-only password for ems_api
+      - ./Database/dev_roles.sql:/docker-entrypoint-initdb.d/zz_dev_roles.sql
     ports:
       - "5432:5432"
     networks:
@@ -115,8 +117,10 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=energy_db
-      - DB_USER=energy_user
-      - DB_PASSWORD=energy_pass
+      # The API connects as ems_api, which is NOT the table owner,
+      # so PostgreSQL row-level security always applies to it.
+      - DB_USER=ems_api
+      - DB_PASSWORD=ems_api_dev
       - JWT_SECRET=energy-monitoring-super-secret-key-change-in-production
       - SPRING_PROFILES_ACTIVE=docker
 
