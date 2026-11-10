@@ -49,3 +49,5 @@ Embedded/temp_sensor
 Embedded/occupancy_sensor
 Embedded/hvac_controller
 Embedded/power_meter
+
+Gateway/.venv/
