@@ -1,8 +1,11 @@
 package com.energy.service;
 
 import com.energy.dto.ZoneResponse;
+import com.energy.model.Building;
 import com.energy.model.Zone;
+import com.energy.repository.BuildingRepository;
 import com.energy.repository.ZoneRepository;
+import com.energy.security.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,36 +13,32 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * ZoneService - business logic for zones.
+ * Row-level security already limits every query to the current organization.
+ */
 @Service
 @RequiredArgsConstructor
 public class ZoneService {
 
-    private final ZoneRepository zoneRepository;
-
-    /**
-     * Get all zones.
-     *
-     * @Transactional(readOnly = true)
-     * Wraps this method in a database transaction.
-     * readOnly = true tells the database this query will not
-     * modify any data — the DB can optimize reads accordingly.
-     * Always use readOnly = true on methods that only fetch data.
-     */
-    @Transactional(readOnly = true)
-    public List<ZoneResponse> getAllZones() {
-        return zoneRepository.findAll()       // List<Zone> from DB
-            .stream()                          // turn list into a stream
-            .map(ZoneResponse::from)           // convert each Zone → ZoneResponse
-            .collect(Collectors.toList());     // gather back into a List
+    /** Thrown when the organization has no building to put the zone in. */
+    public static class NoBuildingException extends RuntimeException {
+        public NoBuildingException() {
+            super("Your organization has no building yet");
+        }
     }
 
-    /**
-     * Get one zone by name.
-     *
-     * orElseThrow() — if the zone doesn't exist, throw a clear
-     * exception with a meaningful message instead of returning null.
-     * The controller will catch this and return HTTP 404.
-     */
+    private final ZoneRepository zoneRepository;
+    private final BuildingRepository buildingRepository;
+
+    @Transactional(readOnly = true)
+    public List<ZoneResponse> getAllZones() {
+        return zoneRepository.findAll()
+            .stream()
+            .map(ZoneResponse::from)
+            .collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public ZoneResponse getZoneByName(String name) {
         return zoneRepository.findByName(name)
@@ -48,16 +47,27 @@ public class ZoneService {
     }
 
     /**
-     * Internal helper used by other services.
-     * Returns the raw Zone entity (not a DTO) because other
-     * services need the entity to build their own responses.
-     *
-     * Not exposed as an API endpoint — only used internally.
+     * Create a zone in the organization's first building.
+     * org_id comes from the request's organization (TenantContext), never
+     * from the caller; row-level security's WITH CHECK rejects anything else.
      */
-    @Transactional(readOnly = true)
-    public Zone getZoneEntityByName(String name) {
-        return zoneRepository.findByName(name)
-            .orElseThrow(() -> new RuntimeException("Zone not found: " + name));
-    }
+    @Transactional
+    public ZoneResponse createZone(String name, String description, int capacity) {
+        List<Building> buildings = buildingRepository.findAllByOrderByCreatedAtAsc();
+        if (buildings.isEmpty()) {
+            throw new NoBuildingException();
+        }
 
+        Zone zone = Zone.builder()
+            .orgId(TenantContext.get())
+            .building(buildings.get(0))
+            .name(name)
+            .description(description)
+            .capacity(capacity)
+            .build();
+
+        // saveAndFlush: run the INSERT now, so a duplicate name fails here
+        // (and can be reported as 409) instead of at commit time
+        return ZoneResponse.from(zoneRepository.saveAndFlush(zone));
+    }
 }
