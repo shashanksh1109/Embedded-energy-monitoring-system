@@ -6,13 +6,14 @@ import { getLatestHvac } from '../api/hvac'
 import { getLatestPower } from '../api/power'
 import { getMode, setSimulationMode, setHardwareMode } from '../api/mode'
 import StatCard from '../components/StatCard'
-import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts'
+import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts'
 
 function SparkLine({ data, dataKey, color }) {
   if (!data || data.length === 0) return <div className="h-12 flex items-center justify-center text-gray-600 text-xs">no data</div>
   return (
     <ResponsiveContainer width="100%" height={48}>
       <LineChart data={data}>
+        <YAxis hide domain={['dataMin - 0.5', 'dataMax + 0.5']} />
         <Line type="monotone" dataKey={dataKey} stroke={color} dot={false} strokeWidth={1.5} />
         <Tooltip
           contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 6, fontSize: 11 }}
