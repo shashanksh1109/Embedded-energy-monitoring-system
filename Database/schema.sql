@@ -6,8 +6,8 @@
 -- can never read or write another organization's rows — even if a
 -- Java query forgets to filter.
 --
--- Run this file as ONE script (Flyway migration or `psql -f`), not split
--- on semicolons.
+-- This file has no function bodies, so the current schema-loader Lambda
+-- (which splits on semicolons) can load it. Load it into an EMPTY database.
 -- =====================================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -170,56 +170,52 @@ CREATE INDEX idx_power_zone_time ON power_readings (zone_id, recorded_at DESC);
 -- ---------------------------------------------------------------------
 -- 5. Row-level security
 --
--- The backend runs every request inside a transaction and first does:
+-- The API connects as role ems_api (not the table owner). For every
+-- request it first checks `memberships`, then runs:
 --     SET LOCAL app.current_org = '<org uuid the user selected>';
--- (after checking in `memberships` that the user really belongs to it).
 -- Every policy below compares org_id with that setting.
 --
 -- current_setting(..., true) returns NULL when the setting is missing,
 -- and `org_id = NULL` is never true — so a request that forgot to set
 -- the org sees NOTHING instead of everything. Fail closed.
 --
--- FORCE makes the policies apply even to the table owner.
+-- The table OWNER (the admin user that runs this script, and for now the
+-- gateway) is not subject to these policies. That is deliberate: the
+-- gateway must look up devices and write readings for EVERY organization.
+-- Never let the API connect as the owner.
 -- ---------------------------------------------------------------------
 
 ALTER TABLE buildings            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE buildings            FORCE  ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON buildings
     USING      (org_id = current_setting('app.current_org', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
 
 ALTER TABLE zones                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE zones                FORCE  ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON zones
     USING      (org_id = current_setting('app.current_org', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
 
 ALTER TABLE devices              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE devices              FORCE  ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON devices
     USING      (org_id = current_setting('app.current_org', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
 
 ALTER TABLE temperature_readings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE temperature_readings FORCE  ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON temperature_readings
     USING      (org_id = current_setting('app.current_org', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
 
 ALTER TABLE occupancy_readings   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE occupancy_readings   FORCE  ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON occupancy_readings
     USING      (org_id = current_setting('app.current_org', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
 
 ALTER TABLE hvac_state           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hvac_state           FORCE  ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON hvac_state
     USING      (org_id = current_setting('app.current_org', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
 
 ALTER TABLE power_readings       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE power_readings       FORCE  ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON power_readings
     USING      (org_id = current_setting('app.current_org', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
@@ -229,30 +225,74 @@ CREATE POLICY tenant_isolation ON power_readings
 -- Access to those three tables is controlled in the backend code instead.
 
 -- ---------------------------------------------------------------------
--- 6. Database roles
---
--- ems_api     : used by Spring Boot. Subject to RLS.
--- ems_ingest  : used by the ingest worker. It writes readings for ALL
---               organizations (it looks up org_id from the device), so it
---               bypasses RLS — and gets INSERT/UPDATE only, no DELETE.
--- Set real passwords from Secrets Manager; never hardcode them.
+-- 6. Gateway-written tables and system settings
 -- ---------------------------------------------------------------------
 
-CREATE ROLE ems_api    LOGIN;
-CREATE ROLE ems_ingest LOGIN BYPASSRLS;   -- on RDS, confirm your master user may grant BYPASSRLS
+CREATE TABLE analytics_snapshots (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id        UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    zone_id       UUID        NOT NULL,
+    metric_type   VARCHAR(32) NOT NULL,
+    mean_val      DOUBLE PRECISION NOT NULL,
+    stddev_val    DOUBLE PRECISION NOT NULL,
+    min_val       DOUBLE PRECISION NOT NULL,
+    max_val       DOUBLE PRECISION NOT NULL,
+    sample_count  INTEGER     NOT NULL CHECK (sample_count > 0),
+    window_start  TIMESTAMPTZ,
+    snapshot_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (org_id, zone_id) REFERENCES zones (org_id, id) ON DELETE CASCADE
+);
+CREATE INDEX idx_analytics_zone ON analytics_snapshots (zone_id, metric_type, snapshot_at DESC);
+
+CREATE TABLE orchestration_events (
+    id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id         UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    zone_id        UUID        NOT NULL,
+    event_type     VARCHAR(32) NOT NULL,
+    trigger_value  DOUBLE PRECISION,
+    action_taken   VARCHAR(255),
+    occurred_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (org_id, zone_id) REFERENCES zones (org_id, id) ON DELETE CASCADE
+);
+CREATE INDEX idx_events_zone_time ON orchestration_events (zone_id, occurred_at DESC);
+
+ALTER TABLE analytics_snapshots  ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON analytics_snapshots
+    USING      (org_id = current_setting('app.current_org', true)::uuid)
+    WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
+
+ALTER TABLE orchestration_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON orchestration_events
+    USING      (org_id = current_setting('app.current_org', true)::uuid)
+    WITH CHECK (org_id = current_setting('app.current_org', true)::uuid);
+
+-- Platform-wide setting (simulation vs hardware), not per organization.
+CREATE TABLE system_mode (
+    id         INTEGER     PRIMARY KEY DEFAULT 1,
+    mode       VARCHAR(16) NOT NULL DEFAULT 'SIMULATION',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT single_row CHECK (id = 1),
+    CONSTRAINT valid_mode CHECK (mode IN ('SIMULATION', 'HARDWARE'))
+);
+INSERT INTO system_mode (id, mode) VALUES (1, 'SIMULATION') ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- 7. Database role for the API
+--
+-- ems_api is NOT the table owner, so row-level security always applies
+-- to it. Its password is set separately (from Secrets Manager), never here.
+-- ---------------------------------------------------------------------
+
+CREATE ROLE ems_api LOGIN;
 
 GRANT SELECT, INSERT, UPDATE, DELETE
     ON organizations, app_users, memberships, buildings, zones, devices
     TO ems_api;
 GRANT SELECT
-    ON temperature_readings, occupancy_readings, hvac_state, power_readings
+    ON temperature_readings, occupancy_readings, hvac_state, power_readings,
+       analytics_snapshots, orchestration_events
     TO ems_api;
-
-GRANT SELECT ON devices TO ems_ingest;
-GRANT UPDATE (last_seen_at, firmware_version) ON devices TO ems_ingest;
-GRANT INSERT
-    ON temperature_readings, occupancy_readings, hvac_state, power_readings
-    TO ems_ingest;
+GRANT SELECT, UPDATE ON system_mode TO ems_api;
 
 
 -- =====================================================================
@@ -265,9 +305,9 @@ INSERT INTO organizations (id, name)
 VALUES ('00000000-0000-0000-0000-000000000001', 'Demo Organization')
 ON CONFLICT (id) DO NOTHING;
 
--- The tables below have FORCE ROW LEVEL SECURITY, which applies even to
--- the admin user running this script. Tell PostgreSQL which organization
--- these rows belong to, or every INSERT is rejected by the policy.
+-- Not strictly needed when running as the table owner (owners aren't
+-- subject to RLS), but it keeps this script working if it is ever run
+-- by a non-owner role.
 SET app.current_org = '00000000-0000-0000-0000-000000000001';
 
 INSERT INTO buildings (id, org_id, name, address)
