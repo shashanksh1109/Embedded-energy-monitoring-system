@@ -13,7 +13,29 @@ import socket
 import threading
 import time
 from datetime import datetime, timezone
-from protocol import PacketParser
+from protocol import PacketParser, PACKET_TYPE_HVAC_STATE, PACKET_TYPE_HVAC_TEMP
+
+
+# ------------------------------------------------------------------
+# V2 packet detection
+#
+# Every packet starts with 20 bytes. A V2 packet (32 bytes) has its TYPE at
+# byte 12 and VERSION = 2 at byte 13. In a V1 packet, bytes 12-15 are the
+# float value instead, so they can look like anything.
+#
+# Only HVAC packet types are ever sent as V2, so a packet is treated as V2
+# only if byte 13 is 2 AND byte 12 is an HVAC type. (The old check accepted
+# types 0-3, which are V1-only types, and rejected 4 = HVAC_STATE, so real
+# HVAC packets were misread and the stream went out of sync.)
+# ------------------------------------------------------------------
+V2_PACKET_TYPES = (PACKET_TYPE_HVAC_STATE, PACKET_TYPE_HVAC_TEMP)
+
+
+def is_v2_header(first20):
+    """True if the first 20 bytes are the start of a 32-byte V2 packet."""
+    if len(first20) < 14:
+        return False
+    return first20[13] == 2 and first20[12] in V2_PACKET_TYPES
 
 
 # ------------------------------------------------------------------
@@ -61,14 +83,8 @@ class ClientHandler:
                 if not data:
                     break
 
-                # Check version byte at position 13 (V2 packets have version=2 there)
-                # V1 packets have checksum at byte 17 — byte 13 is part of the float value
-                # V2 packets explicitly set version=2 at byte 13
-                pkt_type_byte = data[12] if len(data) > 12 else 0xFF
-                version_byte  = data[13] if len(data) > 13 else 0
-                version = version_byte
-
-                if version == 2 and pkt_type_byte in (0, 1, 2, 3):
+                # Is this the start of a 32-byte V2 (HVAC) packet?
+                if is_v2_header(data):
                     # Read remaining 12 bytes to complete the 32-byte V2 packet
                     rest = self._recv_exact(self.parser.get_v2_packet_size() - self.parser.get_packet_size())
                     if not rest:
