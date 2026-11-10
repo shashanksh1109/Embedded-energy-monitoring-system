@@ -40,6 +40,8 @@ typedef struct {
 
 // Function declarations
 HVACConfig parse_hvac_config(int argc, char *argv[]);
+#define RECONNECT_MAX_SEC 30   // longest wait between reconnect attempts
+
 int  connect_to_gateway(void);
 void run_hvac_loop(HVACConfig *config, int sockfd);
 float simulate_temperature_physics(float current_temp, float heater_power,
@@ -98,8 +100,8 @@ int main(int argc, char *argv[]) {
     // Connect to gateway
     int sockfd = connect_to_gateway();
     if (sockfd < 0) {
-        printf("[HVAC] ✗ Failed to connect to gateway, running without telemetry\n");
-        sockfd = -1;  // Continue running even without gateway connection
+        printf("[HVAC] ✗ Gateway not reachable yet, will keep retrying\n");
+        sockfd = -1;  // The control loop keeps running and reconnects later
     }
 
     // Run control loop
@@ -220,6 +222,10 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
     int   iteration     = 0;
     float dt            = 1.0f;  // 1 second time step
 
+    // Reconnect state (see the send section below)
+    time_t next_retry   = 0;     // earliest time to try connecting again
+    int    retry_delay  = 1;     // seconds; doubles after each failed attempt
+
     while (1) {
         iteration++;
 
@@ -271,6 +277,20 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
                               current_temp, config->setpoint);
         }
 
+        // (Re)connect to the gateway if we are not connected.
+        // Retries back off 1s, 2s, 4s ... up to RECONNECT_MAX_SEC, so a
+        // gateway restart no longer silences this controller forever.
+        if (sockfd < 0 && time(NULL) >= next_retry) {
+            sockfd = connect_to_gateway();
+            if (sockfd >= 0) {
+                retry_delay = 1;                       // reset after success
+            } else {
+                next_retry  = time(NULL) + retry_delay;
+                retry_delay = (retry_delay * 2 > RECONNECT_MAX_SEC)
+                              ? RECONNECT_MAX_SEC : retry_delay * 2;
+            }
+        }
+
         // Send V2 packet to gateway
         // value1=heater_pct, value2=cooler_pct, value3=current_temp, value4=setpoint
         if (sockfd >= 0) {
@@ -278,11 +298,15 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
             pack_packet_v2(&pkt, config->device_id, PACKET_TYPE_HVAC_STATE,
                            heater_power, cooler_power, current_temp, config->setpoint);
 
-            ssize_t sent = send(sockfd, &pkt, sizeof(PacketV2), 0);
-            if (sent < 0) {
+            // MSG_NOSIGNAL: if the gateway has gone away, return an error
+            // instead of raising SIGPIPE (which would kill the process).
+            ssize_t sent = send(sockfd, &pkt, sizeof(PacketV2), MSG_NOSIGNAL);
+            if (sent != (ssize_t)sizeof(PacketV2)) {
                 perror("[HVAC ERROR] send()");
-                printf("[HVAC] ✗ Gateway connection lost\n");
-                sockfd = -1;  // Stop trying to send
+                printf("[HVAC] ✗ Gateway connection lost, will reconnect\n");
+                close(sockfd);
+                sockfd     = -1;
+                next_retry = time(NULL) + retry_delay;
             }
         }
 
