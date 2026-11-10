@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usingCognito } from '../api/auth'
+import { getOnboardingStatus } from '../api/onboarding'
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -12,7 +13,17 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     const ok = await login(username, password)
-    if (ok) navigate('/')
+    if (!ok) return
+
+    // A Cognito user without an organization goes to the last sign-up stage
+    if (usingCognito) {
+      const status = await getOnboardingStatus().catch(() => null)
+      if (status && !status.hasOrganization) {
+        navigate('/signup?step=organization')
+        return
+      }
+    }
+    navigate('/')
   }
 
   return (
@@ -72,6 +83,12 @@ export default function Login() {
 
           </form>
         </div>
+
+        {usingCognito && (
+          <p className="text-center text-xs text-gray-500 mt-4">
+            New here? <Link to="/signup" className="text-blue-400 hover:text-blue-300">Create an account</Link>
+          </p>
+        )}
 
         <p className="text-center text-xs text-gray-600 mt-4">
           Embedded Energy Monitoring System
