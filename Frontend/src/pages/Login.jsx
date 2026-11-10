@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usingCognito } from '../api/auth'
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -30,13 +31,16 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
 
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Username</label>
+              <label className="block text-xs text-gray-400 mb-1">
+                {usingCognito ? 'Email' : 'Username'}
+              </label>
               <input
-                type="text"
+                type={usingCognito ? 'email' : 'text'}
+                autoComplete={usingCognito ? 'email' : 'username'}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                placeholder="admin"
+                placeholder={usingCognito ? 'you@company.com' : 'admin'}
                 required
               />
             </div>
@@ -45,6 +49,7 @@ export default function Login() {
               <label className="block text-xs text-gray-400 mb-1">Password</label>
               <input
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { login as loginApi } from '../api/auth'
 
 const AuthContext = createContext(null)
@@ -16,17 +16,15 @@ export function AuthProvider({ children }) {
       const data = await loginApi(username, password)
       localStorage.setItem('token', data.token)
       localStorage.setItem('username', data.username)
+      if (data.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken)
+      }
       setToken(data.token)
       setUsername(data.username)
       return true
     } catch (err) {
-      if (err.response?.status === 401) {
-        setError('Invalid username or password')
-      } else if (err.response?.status >= 500 || !err.response) {
-        setError('Service unavailable — please try again in a moment')
-      } else {
-        setError('Login failed — please try again')
-      }
+      // LoginError messages from api/auth.js are written for users
+      setError(err.message || 'Login failed — please try again')
       return false
     } finally {
       setLoading(false)
@@ -36,6 +34,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('username')
+    localStorage.removeItem('refreshToken')
     setToken(null)
     setUsername(null)
   }
