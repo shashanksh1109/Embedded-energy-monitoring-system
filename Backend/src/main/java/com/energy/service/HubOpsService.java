@@ -75,8 +75,15 @@ public class HubOpsService {
             return null;
         }
         Map<String, Object> r = rows.get(0);
-        return new HubIdentity((UUID) r.get("id"), (UUID) r.get("org_id"),
+        HubIdentity hub = new HubIdentity((UUID) r.get("id"), (UUID) r.get("org_id"),
             (UUID) r.get("device_id"), (String) r.get("thing_name"));
+
+        // Keep the hub's own device row up to date as well, so the Devices
+        // page shows it online. devices has row-level security: act as the
+        // hub's organization for the rest of this transaction only.
+        jdbc.queryForObject("SELECT set_config('app.current_org', ?, true)", String.class, hub.orgId().toString());
+        jdbc.update("UPDATE devices SET last_seen_at = NOW() WHERE id = ?", hub.deviceId());
+        return hub;
     }
 
     /**
