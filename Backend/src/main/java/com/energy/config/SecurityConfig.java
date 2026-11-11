@@ -65,6 +65,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/hubs/commands").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/hubs/commands/*/ack").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/hubs/outputs").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/hubs/config").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/hubs/config/applied").permitAll()
                 .requestMatchers(
                     "/swagger-ui.html",
                     "/swagger-ui/**",

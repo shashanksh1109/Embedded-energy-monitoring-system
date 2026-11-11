@@ -463,3 +463,34 @@ CREATE TABLE hub_outputs (
 );
 
 GRANT SELECT, INSERT, UPDATE ON hub_sensors, hub_commands, hub_outputs TO ems_api;
+
+-- ---------------------------------------------------------------------
+-- 12. Hub hardware configuration (H3b)
+--
+-- What is wired to which pin is set in the dashboard, not in code:
+--   config = {"outputs": [{key, name, kind, gpio, activeHigh}, ...],
+--             "sensors": [{key, name, type, driver, gpio | i2cAddress}, ...]}
+-- Every save increases "version". The hub downloads the config, applies
+-- it, and reports applied_version plus what its I2C scan found.
+-- Outputs are now named by the config (e.g. "fan"), so commands and
+-- output states no longer use a fixed FAN/LED1/LED2 list.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE hub_commands DROP CONSTRAINT IF EXISTS hub_commands_target_check;
+ALTER TABLE hub_commands ALTER COLUMN target TYPE VARCHAR(32);
+ALTER TABLE hub_outputs  DROP CONSTRAINT IF EXISTS hub_outputs_target_check;
+ALTER TABLE hub_outputs  ALTER COLUMN target TYPE VARCHAR(32);
+
+CREATE TABLE hub_configs (
+    hub_id           UUID        PRIMARY KEY REFERENCES hubs(id) ON DELETE CASCADE,
+    version          INTEGER     NOT NULL,
+    config           JSONB       NOT NULL,
+    updated_by       VARCHAR(64),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    applied_version  INTEGER,
+    applied_at       TIMESTAMPTZ,
+    scan             JSONB,          -- what the hub detected, e.g. {"i2c": [118, 64, 60]}
+    scan_at          TIMESTAMPTZ
+);
+
+GRANT SELECT, INSERT, UPDATE ON hub_configs TO ems_api;

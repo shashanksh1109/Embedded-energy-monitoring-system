@@ -1,5 +1,7 @@
 package com.energy.controller;
 
+import com.energy.service.HubConfigService;
+import com.energy.service.HubConfigService.InvalidConfigException;
 import com.energy.service.HubOpsService;
 import com.energy.service.HubOpsService.HubIdentity;
 import com.energy.service.HubOpsService.HubNotFoundException;
@@ -10,6 +12,7 @@ import com.energy.service.HubService.InvalidPairingCodeException;
 import com.energy.service.HubService.PairResult;
 import com.energy.service.HubService.PairingStart;
 import com.energy.service.MembershipService;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -36,10 +39,14 @@ import java.util.UUID;
  *   GET  /api/hubs/commands             -> pending FAN/LED commands
  *   POST /api/hubs/commands/{id}/ack    -> report a command's result
  *   POST /api/hubs/outputs              -> report real output states
+ *   GET  /api/hubs/config               -> the hardware config to apply
+ *   POST /api/hubs/config/applied       -> "version N applied" + I2C scan
  *
  * Signed-in users (current organization only):
  *   GET  /api/hubs                      -> hubs with sensors, outputs, recent commands
- *   POST /api/hubs/{hubDeviceId}/commands  (OWNER/ADMIN) -> queue FAN/LED1/LED2 ON/OFF
+ *   POST /api/hubs/{hubDeviceId}/commands  (OWNER/ADMIN) -> queue "<output key> ON/OFF"
+ *   GET  /api/hubs/{hubDeviceId}/config    -> hardware config + what the hub applied/scanned
+ *   PUT  /api/hubs/{hubDeviceId}/config    (OWNER/ADMIN) -> save a new config version
  */
 @RestController
 @RequestMapping("/api/hubs")
@@ -51,6 +58,7 @@ public class HubController {
 
     private final HubService hubService;
     private final HubOpsService hubOps;
+    private final HubConfigService hubConfig;
     private final MembershipService membershipService;
 
     /** Most sensors one hub may register. */
@@ -88,6 +96,12 @@ public class HubController {
     public static class CommandRequest {
         private String target;
         private String action;
+    }
+
+    @Data
+    public static class AppliedRequest {
+        private Integer version;
+        private JsonNode scan;
     }
 
     @PostMapping("/start")
@@ -208,13 +222,36 @@ public class HubController {
             return error(HttpStatus.UNAUTHORIZED, "Unknown or unpaired hub");
         }
         for (Map.Entry<String, String> e : states.entrySet()) {
-            if (!HubOpsService.TARGETS.contains(e.getKey())
+            if (!e.getKey().matches("[a-z0-9_]{1,32}")
                     || !("ON".equals(e.getValue()) || "OFF".equals(e.getValue()))) {
-                return error(HttpStatus.BAD_REQUEST, "Outputs must be FAN/LED1/LED2 with ON or OFF");
+                return error(HttpStatus.BAD_REQUEST, "Outputs must be output keys with ON or OFF");
             }
         }
         hubOps.reportOutputs(hub, states);
         return ResponseEntity.ok(Map.of("saved", states.size()));
+    }
+
+    @GetMapping("/config")
+    public ResponseEntity<?> configForHub(@RequestHeader(value = HUB_KEY_HEADER, required = false) String hubKey) {
+        HubIdentity hub = hubOps.authenticate(hubKey);
+        if (hub == null) {
+            return error(HttpStatus.UNAUTHORIZED, "Unknown or unpaired hub");
+        }
+        return ResponseEntity.ok(hubConfig.getForHub(hub));
+    }
+
+    @PostMapping("/config/applied")
+    public ResponseEntity<?> configApplied(@RequestHeader(value = HUB_KEY_HEADER, required = false) String hubKey,
+                                           @RequestBody AppliedRequest body) {
+        HubIdentity hub = hubOps.authenticate(hubKey);
+        if (hub == null) {
+            return error(HttpStatus.UNAUTHORIZED, "Unknown or unpaired hub");
+        }
+        if (body.getVersion() == null || body.getVersion() < 0) {
+            return error(HttpStatus.BAD_REQUEST, "version is required");
+        }
+        hubConfig.markApplied(hub, body.getVersion(), body.getScan());
+        return ResponseEntity.ok(Map.of("saved", true));
     }
 
     // ------------------------------------------------------------------
@@ -233,19 +270,45 @@ public class HubController {
         if (!membershipService.canManage(principal)) {
             return error(HttpStatus.FORBIDDEN, "Only an owner or admin can control hubs");
         }
-        String target = body.getTarget() == null ? "" : body.getTarget().trim().toUpperCase();
+        String target = body.getTarget() == null ? "" : body.getTarget().trim();
         String action = body.getAction() == null ? "" : body.getAction().trim().toUpperCase();
-        if (!HubOpsService.TARGETS.contains(target)) {
-            return error(HttpStatus.BAD_REQUEST, "target must be one of " + HubOpsService.TARGETS);
-        }
         if (!"ON".equals(action) && !"OFF".equals(action)) {
             return error(HttpStatus.BAD_REQUEST, "action must be ON or OFF");
         }
         try {
+            // target must be an output in this hub's CURRENT hardware config
+            if (!hubConfig.outputKeys(hubDeviceId).contains(target)) {
+                return error(HttpStatus.BAD_REQUEST, "No output '" + target + "' in this hub's hardware setup");
+            }
             UUID id = hubOps.sendCommand(hubDeviceId, target, action, principal.getName());
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("commandId", id, "status", "PENDING"));
         } catch (HubNotFoundException e) {
             return error(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+
+    @GetMapping("/{hubDeviceId}/config")
+    public ResponseEntity<?> getConfig(@PathVariable UUID hubDeviceId) {
+        try {
+            return ResponseEntity.ok(hubConfig.getForUser(hubDeviceId));
+        } catch (HubNotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+
+    @PutMapping("/{hubDeviceId}/config")
+    public ResponseEntity<?> saveConfig(@PathVariable UUID hubDeviceId,
+                                        @RequestBody JsonNode config,
+                                        Principal principal) {
+        if (!membershipService.canManage(principal)) {
+            return error(HttpStatus.FORBIDDEN, "Only an owner or admin can change the hardware setup");
+        }
+        try {
+            return ResponseEntity.ok(hubConfig.save(hubDeviceId, config, principal.getName()));
+        } catch (HubNotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (InvalidConfigException e) {
+            return error(HttpStatus.BAD_REQUEST, e.getMessage());
         }
     }
 
