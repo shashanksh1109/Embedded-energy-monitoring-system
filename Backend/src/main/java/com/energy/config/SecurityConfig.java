@@ -61,6 +61,10 @@ public class SecurityConfig {
                 // own hub key (checked in HubController), before any login exists
                 .requestMatchers(HttpMethod.POST, "/api/hubs/start").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/hubs/status").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/hubs/sensors").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/hubs/commands").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/hubs/commands/*/ack").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/hubs/outputs").permitAll()
                 .requestMatchers(
                     "/swagger-ui.html",
                     "/swagger-ui/**",

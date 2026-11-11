@@ -415,3 +415,51 @@ CREATE TABLE hubs (
 );
 
 GRANT SELECT, INSERT, UPDATE ON hubs TO ems_api;
+
+-- ---------------------------------------------------------------------
+-- 11. Hub sensors and remote control (H2)
+--
+-- hub_sensors : sensors a hub discovered. Each one becomes a row in
+--               devices (in the hub's organization), first WITHOUT a zone,
+--               so the gateway ignores it until the customer places it.
+-- hub_commands: "turn FAN/LED1/LED2 ON/OFF", sent from the dashboard,
+--               fetched by the hub, confirmed (DONE/FAILED) by the hub.
+--               A command not fetched within its lifetime expires.
+-- hub_outputs : the last CONFIRMED state of each output, as reported by
+--               the hub itself (not what someone clicked).
+-- No row-level security: the hub reaches these with its key, before an
+-- organization is known. Every user-facing query filters by org_id itself.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE hubs ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+
+CREATE TABLE hub_sensors (
+    hub_id     UUID        NOT NULL REFERENCES hubs(id) ON DELETE CASCADE,
+    local_id   VARCHAR(64) NOT NULL,                 -- the hub's own name, e.g. soc_temp
+    device_id  UUID        NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    PRIMARY KEY (hub_id, local_id)
+);
+
+CREATE TABLE hub_commands (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    hub_id        UUID        NOT NULL REFERENCES hubs(id) ON DELETE CASCADE,
+    target        VARCHAR(16) NOT NULL CHECK (target IN ('FAN', 'LED1', 'LED2')),
+    action        VARCHAR(8)  NOT NULL CHECK (action IN ('ON', 'OFF')),
+    status        VARCHAR(16) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'DONE', 'FAILED')),
+    requested_by  VARCHAR(64),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at    TIMESTAMPTZ NOT NULL,
+    completed_at  TIMESTAMPTZ,
+    message       VARCHAR(255)
+);
+CREATE INDEX idx_hub_commands_pending ON hub_commands (hub_id, status, created_at);
+
+CREATE TABLE hub_outputs (
+    hub_id       UUID        NOT NULL REFERENCES hubs(id) ON DELETE CASCADE,
+    target       VARCHAR(16) NOT NULL CHECK (target IN ('FAN', 'LED1', 'LED2')),
+    state        VARCHAR(8)  NOT NULL CHECK (state IN ('ON', 'OFF')),
+    reported_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (hub_id, target)
+);
+
+GRANT SELECT, INSERT, UPDATE ON hub_sensors, hub_commands, hub_outputs TO ems_api;

@@ -45,6 +45,11 @@ public class DeviceController {
     }
 
     @Data
+    public static class ZoneRequest {
+        private UUID zoneId;          // null = take the device out of its zone
+    }
+
+    @Data
     public static class ClaimByCodeRequest {
         private String code;
         private UUID zoneId;
@@ -143,6 +148,23 @@ public class DeviceController {
             return error(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (DataIntegrityViolationException e) {
             return error(HttpStatus.CONFLICT, "This device is already registered");
+        }
+    }
+
+    /** Place a device in a zone (OWNER or ADMIN), e.g. a sensor found by a hub. */
+    @PutMapping("/{deviceId}/zone")
+    public ResponseEntity<?> assignZone(@PathVariable UUID deviceId,
+                                        @RequestBody ZoneRequest body,
+                                        Principal principal) {
+        if (!membershipService.canManage(principal)) {
+            return error(HttpStatus.FORBIDDEN, "Only an owner or admin can place devices");
+        }
+        try {
+            return ResponseEntity.ok(deviceService.assignZone(deviceId, body.getZoneId()));
+        } catch (DeviceService.NotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return error(HttpStatus.BAD_REQUEST, e.getMessage());
         }
     }
 
