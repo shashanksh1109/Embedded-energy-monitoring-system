@@ -10,3 +10,7 @@ export const getDevices = () =>
  */
 export const registerDevice = ({ zoneId, deviceType, displayName }) =>
   api.post('/devices', { zoneId, deviceType, displayName }).then(r => r.data)
+
+/** Place a device in a zone, or take it out with zoneId = null (OWNER or ADMIN). */
+export const assignZone = (deviceId, zoneId) =>
+  api.put(`/devices/${deviceId}/zone`, { zoneId }).then(r => r.data)

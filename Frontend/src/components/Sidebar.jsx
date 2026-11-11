@@ -5,6 +5,7 @@ const links = [
   { to: '/',          label: 'Dashboard',    icon: '\u26A1' },
   { to: '/overview',  label: 'Zone Overview', icon: '\u{1F3E2}' },
   { to: '/devices',   label: 'Devices',       icon: '\u{1F4DF}' },
+  { to: '/hubs',      label: 'Hubs',          icon: '\u{1F4E1}' },
   { to: '/charts',    label: 'Charts',        icon: '\u{1F4C8}' },
   { to: '/analytics', label: 'Analytics',     icon: '\u{1F4CA}' },
   { to: '/schedules', label: 'Schedules',     icon: '\u{1F4C5}' },
