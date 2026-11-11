@@ -338,3 +338,23 @@ WHERE z.name = 'Zone_A'
 ON CONFLICT (thing_name) DO NOTHING;
 
 RESET app.current_org;
+-- ---------------------------------------------------------------------
+-- 8. Device claim codes (Step 34)
+--
+-- No row-level security on purpose: a device presents its code BEFORE we
+-- know its organization. Only a SHA-256 hash of each code is stored, so
+-- the table is useless to anyone reading it. Codes are single-use
+-- (used_at) and expire (expires_at).
+-- ---------------------------------------------------------------------
+
+CREATE TABLE device_claims (
+    code_hash   CHAR(64)    PRIMARY KEY,
+    device_id   UUID        NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    org_id      UUID        NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used_at     TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_device_claims_device ON device_claims (device_id);
+
+GRANT SELECT, INSERT, UPDATE ON device_claims TO ems_api;

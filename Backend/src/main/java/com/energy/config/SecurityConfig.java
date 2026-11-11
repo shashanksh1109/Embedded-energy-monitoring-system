@@ -3,6 +3,7 @@ import com.energy.security.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -26,7 +27,7 @@ public class SecurityConfig {
     private final JwtFilter jwtFilter;
     private final CorsConfigurationSource corsConfigurationSource;
 
-    // Only "admin" is a valid username — any other username throws exception → 401
+    // Only "admin" is a valid username - any other username throws exception -> 401
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> {
@@ -49,7 +50,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/api/mode/**").permitAll()
+                // Reading the mode is public; CHANGING it (starting/stopping
+                // ECS services) now requires a signed-in user
+                .requestMatchers(HttpMethod.GET, "/api/mode").permitAll()
+                // Devices claim themselves with a one-time code, before any login exists
+                .requestMatchers(HttpMethod.POST, "/api/devices/claim").permitAll()
                 .requestMatchers(
                     "/swagger-ui.html",
                     "/swagger-ui/**",
