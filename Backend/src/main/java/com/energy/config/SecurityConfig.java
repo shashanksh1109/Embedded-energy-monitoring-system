@@ -57,6 +57,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/mode").permitAll()
                 // Devices claim themselves with a one-time code, before any login exists
                 .requestMatchers(HttpMethod.POST, "/api/devices/claim").permitAll()
+                // Raspberry Pi hubs: ask for a pairing code, and poll with their
+                // own hub key (checked in HubController), before any login exists
+                .requestMatchers(HttpMethod.POST, "/api/hubs/start").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/hubs/status").permitAll()
                 .requestMatchers(
                     "/swagger-ui.html",
                     "/swagger-ui/**",

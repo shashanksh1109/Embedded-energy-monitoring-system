@@ -382,3 +382,36 @@ CREATE TABLE factory_devices (
 );
 
 GRANT SELECT, UPDATE ON factory_devices TO ems_api;
+
+-- ---------------------------------------------------------------------
+-- 10. Hubs (H1) - a Raspberry Pi hub pairs itself by showing a code
+--
+-- Pairing ("enter the code shown on your device"):
+--   1. The hub asks for a pairing code. It receives a secret HUB KEY
+--      (kept on the hub) and a short code (shown on its OLED).
+--   2. A signed-in OWNER/ADMIN types the code in the dashboard: the hub
+--      joins that organization and gets its own row in devices (type HUB).
+--   3. The hub, polling with its key, learns it is paired.
+-- Only SHA-256 hashes of the key and the code are stored.
+-- No row-level security: a hub authenticates with its key BEFORE we know
+-- its organization.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_device_type_check;
+ALTER TABLE devices ADD CONSTRAINT devices_device_type_check
+    CHECK (device_type IN ('TEMP', 'OCCUPANCY', 'HVAC', 'POWER', 'MULTI', 'HUB'));
+
+CREATE TABLE hubs (
+    id                  UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    key_hash            CHAR(64)     NOT NULL UNIQUE,
+    pairing_code_hash   CHAR(64)     UNIQUE,          -- NULL once paired
+    pairing_expires_at  TIMESTAMPTZ,
+    hardware_model      VARCHAR(64),
+    org_id              UUID REFERENCES organizations(id) ON DELETE CASCADE,  -- NULL until paired
+    device_id           UUID REFERENCES devices(id) ON DELETE CASCADE,        -- the hub's own device row
+    thing_name          VARCHAR(128),
+    paired_at           TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+GRANT SELECT, INSERT, UPDATE ON hubs TO ems_api;
