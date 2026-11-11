@@ -358,3 +358,27 @@ CREATE TABLE device_claims (
 CREATE INDEX idx_device_claims_device ON device_claims (device_id);
 
 GRANT SELECT, INSERT, UPDATE ON device_claims TO ems_api;
+
+-- ---------------------------------------------------------------------
+-- 9. Factory inventory (Step 38) - the product device flow
+--
+-- Devices made "at the factory" are listed here before any customer owns
+-- them. Each one already knows its thing name; a claim code is printed on
+-- its label. Only the code's SHA-256 hash is stored. When a customer
+-- enters the code in the dashboard, a row is created in devices (in the
+-- customer's organization) and this row is marked claimed.
+--
+-- No row-level security: this inventory belongs to no customer.
+-- ---------------------------------------------------------------------
+
+CREATE TABLE factory_devices (
+    thing_name       VARCHAR(128) PRIMARY KEY,
+    device_type      VARCHAR(32)  NOT NULL CHECK (device_type IN ('TEMP', 'OCCUPANCY', 'HVAC', 'POWER', 'MULTI')),
+    model            VARCHAR(64),
+    claim_code_hash  CHAR(64)     NOT NULL UNIQUE,
+    manufactured_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    claimed_at       TIMESTAMPTZ,
+    device_id        UUID REFERENCES devices(id) ON DELETE SET NULL
+);
+
+GRANT SELECT, UPDATE ON factory_devices TO ems_api;

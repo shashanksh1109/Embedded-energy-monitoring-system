@@ -33,6 +33,13 @@ import java.util.UUID;
  *    code. If it matches an unused, unexpired claim, the device becomes
  *    ACTIVE and learns its thing name. From then on the gateway accepts
  *    its readings, and they land in the right organization.
+ *
+ * Product flow (device -> dashboard), for devices made in a factory:
+ *
+ * 3. claimFactoryDevice(): the device already knows its thing name (set at
+ *    the factory) and its claim code is printed on its label. The customer
+ *    types the code in the dashboard; the device is moved from the factory
+ *    inventory into the customer's organization and zone, already ACTIVE.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,6 +48,13 @@ public class DeviceRegistrationService {
     public static class ZoneNotFoundException extends RuntimeException {
         public ZoneNotFoundException() {
             super("Zone not found");
+        }
+    }
+
+    /** Thrown when a factory claim code is wrong or the device was already claimed. */
+    public static class InvalidCodeException extends RuntimeException {
+        public InvalidCodeException() {
+            super("Invalid or already used device code");
         }
     }
 
@@ -122,6 +136,47 @@ public class DeviceRegistrationService {
         String zoneName = jdbc.queryForObject(
             "SELECT name FROM zones WHERE id = ?", String.class, d.get("zone_id"));
         return new ClaimResult((String) d.get("thing_name"), (String) d.get("device_type"), zoneName);
+    }
+
+    /**
+     * Product flow: add a factory-made device to one of the organization's
+     * zones, using the code printed on its label.
+     *
+     * factory_devices is the manufacturer's inventory (no row-level security:
+     * it belongs to no customer yet). It stores only a HASH of each label
+     * code. FOR UPDATE makes two customers typing the same code at the same
+     * moment wait for each other; only the first one gets the device.
+     */
+    @Transactional
+    public DeviceResponse claimFactoryDevice(String code, UUID zoneId, String displayName) {
+        Zone zone = zoneRepository.findById(zoneId).orElseThrow(ZoneNotFoundException::new);
+
+        List<Map<String, Object>> rows = jdbc.queryForList(
+            "SELECT thing_name, device_type FROM factory_devices " +
+            "WHERE claim_code_hash = ? AND claimed_at IS NULL FOR UPDATE",
+            sha256(normalize(code)));
+        if (rows.isEmpty()) {
+            throw new InvalidCodeException();
+        }
+        String thingName = (String) rows.get(0).get("thing_name");
+        String deviceType = (String) rows.get(0).get("device_type");
+
+        Device device = Device.builder()
+            .orgId(TenantContext.get())
+            .zone(zone)
+            .thingName(thingName)
+            .deviceType(deviceType)
+            .displayName(displayName)
+            .status(Device.Status.ACTIVE)          // the device is already sending
+            .claimedAt(OffsetDateTime.now())
+            .build();
+        device = deviceRepository.saveAndFlush(device);
+
+        jdbc.update(
+            "UPDATE factory_devices SET claimed_at = NOW(), device_id = ? WHERE thing_name = ?",
+            device.getId(), thingName);
+
+        return DeviceResponse.from(device);
     }
 
     /**

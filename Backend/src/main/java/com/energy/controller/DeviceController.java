@@ -3,6 +3,7 @@ package com.energy.controller;
 import com.energy.dto.DeviceResponse;
 import com.energy.service.DeviceRegistrationService;
 import com.energy.service.DeviceRegistrationService.ClaimResult;
+import com.energy.service.DeviceRegistrationService.InvalidCodeException;
 import com.energy.service.DeviceRegistrationService.Registration;
 import com.energy.service.DeviceRegistrationService.ZoneNotFoundException;
 import com.energy.service.DeviceService;
@@ -41,6 +42,13 @@ public class DeviceController {
     @Data
     public static class ClaimRequest {
         private String code;
+    }
+
+    @Data
+    public static class ClaimByCodeRequest {
+        private String code;
+        private UUID zoneId;
+        private String displayName;
     }
 
     @GetMapping
@@ -103,6 +111,39 @@ public class DeviceController {
             "deviceType", result.deviceType(),
             "zoneName", result.zoneName()
         ));
+    }
+
+    /**
+     * Product flow: add a factory-made device by the code on its label
+     * (OWNER or ADMIN). The device is placed in the chosen zone, ACTIVE.
+     */
+    @PostMapping("/claim-by-code")
+    public ResponseEntity<?> claimByCode(@RequestBody ClaimByCodeRequest body, Principal principal) {
+        if (!membershipService.canManage(principal)) {
+            return error(HttpStatus.FORBIDDEN, "Only an owner or admin can add devices");
+        }
+        if (body.getCode() == null || body.getCode().isBlank()) {
+            return error(HttpStatus.BAD_REQUEST, "code is required");
+        }
+        if (body.getZoneId() == null) {
+            return error(HttpStatus.BAD_REQUEST, "zoneId is required");
+        }
+        String displayName = body.getDisplayName() == null ? null : body.getDisplayName().trim();
+        if (displayName != null && displayName.length() > 120) {
+            return error(HttpStatus.BAD_REQUEST, "Display name must be at most 120 characters");
+        }
+
+        try {
+            DeviceResponse device = registrationService.claimFactoryDevice(
+                body.getCode(), body.getZoneId(), displayName);
+            return ResponseEntity.status(HttpStatus.CREATED).body(device);
+        } catch (ZoneNotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (InvalidCodeException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (DataIntegrityViolationException e) {
+            return error(HttpStatus.CONFLICT, "This device is already registered");
+        }
     }
 
     private static ResponseEntity<Map<String, String>> error(HttpStatus status, String message) {
