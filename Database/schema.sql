@@ -363,7 +363,7 @@ GRANT SELECT, INSERT, UPDATE ON device_claims TO ems_api;
 -- 9. Factory inventory (Step 38) - the product device flow
 --
 -- Devices made "at the factory" are listed here before any customer owns
--- them. Each one already knows its thing name; a claim code is printed on
+-- them. Each one already knows its thing name, and a claim code is printed on
 -- its label. Only the code's SHA-256 hash is stored. When a customer
 -- enters the code in the dashboard, a row is created in devices (in the
 -- customer's organization) and this row is marked claimed.

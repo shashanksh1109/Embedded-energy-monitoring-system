@@ -41,7 +41,7 @@ def lambda_handler(event, context):
     response   = s3.get_object(Bucket=bucket, Key=key)
     schema_sql = response['Body'].read().decode('utf-8')
 
-    # Always execute schema — CREATE TABLE IF NOT EXISTS is idempotent
+    # Always execute schema - CREATE TABLE IF NOT EXISTS is idempotent
     # This ensures new tables added later get created automatically
     print("[SCHEMA] Executing schema...")
     statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
@@ -56,6 +56,23 @@ def lambda_handler(event, context):
             skipped += 1
 
     print(f"[SCHEMA] Done: {success} statements succeeded, {skipped} skipped")
+
+    # Give the restricted API role (created by schema.sql, without a password)
+    # its password from Secrets Manager. ALTER ROLE can't take a query
+    # parameter, so the password is generated as letters and digits only
+    # (see secrets.tf) and checked here before it is embedded.
+    api_secret_arn = os.environ.get('EMS_API_SECRET_ARN')
+    api_role_ok = False
+    if api_secret_arn:
+        api_creds = get_secret(api_secret_arn, region)
+        password = api_creds['password']
+        if not password.isalnum():
+            raise ValueError("ems_api password must be letters and digits only")
+        cursor.execute(f"ALTER ROLE ems_api WITH LOGIN PASSWORD '{password}'")
+        api_role_ok = True
+        print("[SCHEMA] ems_api role password set")
+
     cursor.close()
     conn.close()
-    return {"statusCode": 200, "body": f"Schema loaded: {success} succeeded, {skipped} skipped"}
+    return {"statusCode": 200,
+            "body": f"Schema loaded: {success} succeeded, {skipped} skipped; ems_api password set: {api_role_ok}"}
