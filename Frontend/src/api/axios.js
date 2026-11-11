@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { refreshAccessToken } from './session'
 
 // API URL priority:
 // 1. VITE_API_URL environment variable (set at build time)
@@ -24,26 +25,48 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Session expired or invalid -> back to the login page.
-//
-// Spring Security answers 403 (with an EMPTY body) when no valid token is
-// present, so that case counts as "signed out" too. But our own API also
-// returns 403 with a JSON {"error": "..."} body when a signed-in user lacks
-// permission (e.g. a VIEWER adding a zone) - that must NOT sign them out.
-// The login request itself is excluded, so a wrong password shows an error
-// message instead of reloading the page.
+function signOutAndGoToLogin() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('username')
+  localStorage.removeItem('refreshToken')
+  window.location.href = '/login'
+}
+
+// If several requests fail at the same moment (the dashboard sends many),
+// they all wait for ONE refresh instead of each starting their own.
+let refreshing = null
+
+// 401 = not signed in, or the access token expired
+//   -> try once to get a new access token with the refresh token,
+//      then repeat the original request; if that fails, sign out.
+// 403 = signed in, but not allowed (e.g. a VIEWER adding a zone)
+//   -> never signs out; the page shows the error message.
+// The login request itself is excluded, so a wrong password shows an
+// error message instead of reloading the page.
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const original = error.config
     const status = error.response?.status
-    const isLoginRequest = error.config?.url?.includes('/auth/login')
-    const isPermissionError = status === 403 && Boolean(error.response?.data?.error)
-    if ((status === 401 || status === 403) && !isLoginRequest && !isPermissionError) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      localStorage.removeItem('refreshToken')
-      window.location.href = '/login'
+    const isLoginRequest = original?.url?.includes('/auth/login')
+
+    if (status !== 401 || isLoginRequest || !original) {
+      return Promise.reject(error)
     }
+
+    if (!original._retried) {
+      original._retried = true            // retry each request at most once
+      if (!refreshing) {
+        refreshing = refreshAccessToken().finally(() => { refreshing = null })
+      }
+      const newToken = await refreshing
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`
+        return api(original)              // same request, new token
+      }
+    }
+
+    signOutAndGoToLogin()
     return Promise.reject(error)
   }
 )
