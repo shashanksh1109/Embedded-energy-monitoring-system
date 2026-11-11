@@ -25,15 +25,20 @@ api.interceptors.request.use(
 )
 
 // Session expired or invalid -> back to the login page.
-// Spring Security answers 403 (not 401) when no valid token is present,
-// so both are handled. The login request itself is excluded, so a wrong
-// password shows an error message instead of reloading the page.
+//
+// Spring Security answers 403 (with an EMPTY body) when no valid token is
+// present, so that case counts as "signed out" too. But our own API also
+// returns 403 with a JSON {"error": "..."} body when a signed-in user lacks
+// permission (e.g. a VIEWER adding a zone) - that must NOT sign them out.
+// The login request itself is excluded, so a wrong password shows an error
+// message instead of reloading the page.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status
     const isLoginRequest = error.config?.url?.includes('/auth/login')
-    if ((status === 401 || status === 403) && !isLoginRequest) {
+    const isPermissionError = status === 403 && Boolean(error.response?.data?.error)
+    if ((status === 401 || status === 403) && !isLoginRequest && !isPermissionError) {
       localStorage.removeItem('token')
       localStorage.removeItem('username')
       localStorage.removeItem('refreshToken')
