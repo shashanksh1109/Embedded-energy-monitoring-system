@@ -64,6 +64,14 @@ resource "aws_ecs_task_definition" "backend" {
         {
           name  = "SPRING_PROFILES_ACTIVE"
           value = "docker"
+        },
+        {
+          name  = "COGNITO_ISSUER"
+          value = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
+        },
+        {
+          name  = "COGNITO_CLIENT_ID"
+          value = aws_cognito_user_pool_client.web.id
         }
       ]
 
@@ -73,11 +81,11 @@ resource "aws_ecs_task_definition" "backend" {
       secrets = [
         {
           name      = "DB_USER"
-          valueFrom = "${aws_secretsmanager_secret.db_credentials.arn}:username::"
+          valueFrom = "${aws_secretsmanager_secret.ems_api_credentials.arn}:username::"
         },
         {
           name      = "DB_PASSWORD"
-          valueFrom = "${aws_secretsmanager_secret.db_credentials.arn}:password::"
+          valueFrom = "${aws_secretsmanager_secret.ems_api_credentials.arn}:password::"
         },
         {
           name      = "JWT_SECRET"
