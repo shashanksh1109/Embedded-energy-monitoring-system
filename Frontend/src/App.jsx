@@ -9,6 +9,7 @@ import ZoneOverview from './pages/ZoneOverview'
 import Charts from './pages/Charts'
 import Analytics from './pages/Analytics'
 import Schedules from './pages/Schedules'
+import Devices from './pages/Devices'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="overview" element={<ZoneOverview />} />
+            <Route path="devices" element={<Devices />} />
             <Route path="charts" element={<Charts />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="schedules" element={<Schedules />} />
