@@ -106,7 +106,7 @@ resource "aws_ecs_task_definition" "backend" {
       # Health check inside the container
       # ECS uses this to know if the app started successfully
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8081/api/health || exit 1"]
+        command     = ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/api/health || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3
