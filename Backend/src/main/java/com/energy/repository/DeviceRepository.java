@@ -15,61 +15,25 @@ import java.util.UUID;
 public interface DeviceRepository extends JpaRepository<Device, UUID> {
 
     /**
-     * Find a device by its string identifier e.g. "TEMP_A"
-     *
-     * Generated SQL:
-     *   SELECT * FROM devices WHERE device_id = ?
-     *
-     * Returns Optional because the device might not exist.
-     * Used when a packet arrives at the gateway and we need
-     * to verify the device is registered.
+     * Find a device by the name it sends in its packets, e.g. "TEMP_A".
+     * SQL: SELECT * FROM devices WHERE thing_name = ?
      */
-    Optional<Device> findByDeviceId(String deviceId);
+    Optional<Device> findByThingName(String thingName);
 
     /**
-     * Find all devices belonging to a specific zone.
-     *
-     * Spring reads:
-     *   findBy  → WHERE clause
-     *   Zone    → follow the zone relationship
-     *   Name    → on the Zone object, use its name field
-     *
-     * Generated SQL:
-     *   SELECT d.* FROM devices d
-     *   JOIN zones z ON d.zone_id = z.id
-     *   WHERE z.name = ?
-     *
-     * Returns List because a zone has multiple devices.
-     * List is never null — if nothing found it returns empty list [].
+     * All devices placed in a zone.
+     * SQL: SELECT d.* FROM devices d JOIN zones z ON d.zone_id = z.id WHERE z.name = ?
      */
     List<Device> findByZoneName(String zoneName);
 
     /**
-     * Find all active devices in a zone.
-     *
-     * Spring reads three conditions chained together:
-     *   Zone_Name  → JOIN zones WHERE z.name = ?
-     *   And        → AND
-     *   IsActive   → AND d.is_active = ?
-     *
-     * Generated SQL:
-     *   SELECT d.* FROM devices d
-     *   JOIN zones z ON d.zone_id = z.id
-     *   WHERE z.name = ?
-     *   AND d.is_active = true
-     *
-     * Used by the dashboard to show only currently active sensors.
+     * Devices in a zone with a given status, e.g. only ACTIVE ones.
+     * SQL: ... WHERE z.name = ? AND d.status = ?
      */
-    List<Device> findByZoneNameAndIsActive(String zoneName, Boolean isActive);
+    List<Device> findByZoneNameAndStatus(String zoneName, Device.Status status);
 
     /**
-     * Check if a device with this ID already exists.
-     *
-     * Generated SQL:
-     *   SELECT COUNT(*) > 0 FROM devices WHERE device_id = ?
-     *
-     * Used before registering a new device to avoid duplicates.
+     * Check whether a thing name is already registered (before adding a device).
      */
-    boolean existsByDeviceId(String deviceId);
-
+    boolean existsByThingName(String thingName);
 }

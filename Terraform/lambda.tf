@@ -1,7 +1,7 @@
 # lambda.tf
 # Lambda function that automatically loads the DB schema after RDS is created
 
-# ─── Upload schema.sql to S3 ───────────────────────────────────────────
+# --- Upload schema.sql to S3 -------------------------------------------
 resource "aws_s3_object" "schema" {
   bucket = aws_s3_bucket.snapshots.id
   key    = "schema/schema.sql"
@@ -9,14 +9,14 @@ resource "aws_s3_object" "schema" {
   etag   = filemd5("${path.module}/../Database/schema.sql")
 }
 
-# ─── Package Lambda with psycopg2 bundled ─────────────────────────────
+# --- Package Lambda with psycopg2 bundled -----------------------------
 data "archive_file" "schema_loader" {
   type        = "zip"
   source_dir  = "${path.module}/lambda/package"
   output_path = "${path.module}/lambda/schema_loader.zip"
 }
 
-# ─── IAM Role for Lambda ───────────────────────────────────────────────
+# --- IAM Role for Lambda -----------------------------------------------
 resource "aws_iam_role" "lambda_schema" {
   name = "${var.project_name}-lambda-schema-role"
 
@@ -43,9 +43,12 @@ resource "aws_iam_role_policy" "lambda_schema_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_secretsmanager_secret.db_credentials.arn
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          aws_secretsmanager_secret.db_credentials.arn,
+          aws_secretsmanager_secret.ems_api_credentials.arn
+        ]
       },
       {
         Effect   = "Allow"
@@ -56,7 +59,7 @@ resource "aws_iam_role_policy" "lambda_schema_policy" {
   })
 }
 
-# ─── Lambda Function ───────────────────────────────────────────────────
+# --- Lambda Function ---------------------------------------------------
 resource "aws_lambda_function" "schema_loader" {
   filename         = data.archive_file.schema_loader.output_path
   function_name    = "${var.project_name}-schema-loader"
@@ -73,7 +76,8 @@ resource "aws_lambda_function" "schema_loader" {
 
   environment {
     variables = {
-      DB_SECRET_ARN = aws_secretsmanager_secret.db_credentials.arn
+      DB_SECRET_ARN      = aws_secretsmanager_secret.db_credentials.arn
+      EMS_API_SECRET_ARN = aws_secretsmanager_secret.ems_api_credentials.arn
       DB_HOST       = split(":", aws_db_instance.postgres.endpoint)[0]
       DB_NAME       = var.db_name
       SCHEMA_BUCKET = aws_s3_bucket.snapshots.id
@@ -88,7 +92,7 @@ resource "aws_lambda_function" "schema_loader" {
   ]
 }
 
-# ─── Invoke Lambda after creation ──────────────────────────────────────
+# --- Invoke Lambda after creation --------------------------------------
 resource "aws_lambda_invocation" "load_schema" {
   function_name = aws_lambda_function.schema_loader.function_name
 
@@ -100,7 +104,10 @@ resource "aws_lambda_invocation" "load_schema" {
     schema_hash = filemd5("${path.module}/../Database/schema.sql")
   }
 
-  depends_on = [aws_lambda_function.schema_loader]
+  depends_on = [
+    aws_lambda_function.schema_loader,
+    aws_secretsmanager_secret_version.ems_api_credentials
+  ]
 }
 
 output "schema_load_result" {

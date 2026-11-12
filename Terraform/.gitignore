@@ -4,3 +4,6 @@
 *.tfstate
 *.tfstate.backup
 *.tfvars
+
+*.tfstate.*
+lambda/schema_loader.zip

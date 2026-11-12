@@ -12,7 +12,68 @@ Handles:
 import socket
 import threading
 import time
-from protocol import PacketParser
+from datetime import datetime, timezone
+from protocol import PacketParser, PACKET_TYPE_HVAC_STATE, PACKET_TYPE_HVAC_TEMP
+
+
+# ------------------------------------------------------------------
+# V2 packet detection
+#
+# Every packet starts with 20 bytes. A V2 packet (32 bytes) has its TYPE at
+# byte 12 and VERSION = 2 at byte 13. In a V1 packet, bytes 12-15 are the
+# float value instead, so they can look like anything.
+#
+# Only HVAC packet types are ever sent as V2, so a packet is treated as V2
+# only if byte 13 is 2 AND byte 12 is an HVAC type. (The old check accepted
+# types 0-3, which are V1-only types, and rejected 4 = HVAC_STATE, so real
+# HVAC packets were misread and the stream went out of sync.)
+# ------------------------------------------------------------------
+V2_PACKET_TYPES = (PACKET_TYPE_HVAC_STATE, PACKET_TYPE_HVAC_TEMP)
+
+
+def is_v2_header(first20):
+    """True if the first 20 bytes are the start of a 32-byte V2 packet."""
+    if len(first20) < 14:
+        return False
+    return first20[13] == 2 and first20[12] in V2_PACKET_TYPES
+
+
+# ------------------------------------------------------------------
+# HVAC decision memory, shared by all client threads.
+# zone_id -> (last mode written, monotonic time it was written)
+# Used to write hvac_state only when the mode CHANGES, plus a periodic
+# heartbeat so the dashboard's "latest" HVAC row stays fresh.
+# ------------------------------------------------------------------
+_last_hvac      = {}
+_last_hvac_lock = threading.Lock()
+HVAC_HEARTBEAT_SEC = 60
+
+
+# ------------------------------------------------------------------
+# Who owns the HVAC state?
+#
+# If a zone has a real HVAC controller reporting its own state (V2
+# HVAC_STATE packets), THAT is the truth: it is what the equipment is
+# actually doing. The gateway's own HEATING/COOLING/IDLE decision is only
+# a fallback for zones whose controller hasn't reported recently.
+#
+# zone_id -> monotonic time of the last HVAC_STATE packet from a device
+# ------------------------------------------------------------------
+_device_hvac_seen  = {}
+HVAC_DEVICE_FRESH_SEC = 30
+
+
+def note_device_hvac_report(zone_id):
+    """Remember that a real HVAC controller in this zone just reported."""
+    with _last_hvac_lock:
+        _device_hvac_seen[zone_id] = time.monotonic()
+
+
+def device_reported_recently(zone_id):
+    """True if this zone's HVAC controller reported within HVAC_DEVICE_FRESH_SEC."""
+    with _last_hvac_lock:
+        seen = _device_hvac_seen.get(zone_id)
+    return seen is not None and (time.monotonic() - seen) < HVAC_DEVICE_FRESH_SEC
 
 
 class ClientHandler:
@@ -49,14 +110,8 @@ class ClientHandler:
                 if not data:
                     break
 
-                # Check version byte at position 13 (V2 packets have version=2 there)
-                # V1 packets have checksum at byte 17 — byte 13 is part of the float value
-                # V2 packets explicitly set version=2 at byte 13
-                pkt_type_byte = data[12] if len(data) > 12 else 0xFF
-                version_byte  = data[13] if len(data) > 13 else 0
-                version = version_byte
-
-                if version == 2 and pkt_type_byte in (0, 1, 2, 3):
+                # Is this the start of a 32-byte V2 (HVAC) packet?
+                if is_v2_header(data):
                     # Read remaining 12 bytes to complete the 32-byte V2 packet
                     rest = self._recv_exact(self.parser.get_v2_packet_size() - self.parser.get_packet_size())
                     if not rest:
@@ -93,6 +148,12 @@ class ClientHandler:
                     if self.db:
                         self.db.write_packet(packet)
 
+                    # A real HVAC controller reported its state: it owns this zone's HVAC
+                    if packet['type'] == PACKET_TYPE_HVAC_STATE and self.db:
+                        hvac_zone = self.db._get_zone_id(packet['device_id'])
+                        if hvac_zone:
+                            note_device_hvac_report(hvac_zone)
+
                     # Smart orchestration - trigger HVAC if temperature packet
                     if packet['type'] == 0:  # Temperature packet
                         self._check_temperature_and_trigger(packet)
@@ -103,53 +164,77 @@ class ClientHandler:
             self.socket.close()
             print(f"[NETWORK] Client disconnected: {self.address}")
 
-    def _check_temperature_and_trigger(self, packet):
-        """Analyze temperature and trigger HVAC if needed.
-        In ECS we cannot spawn subprocesses — write hvac_state and
-        orchestration_events directly to the DB instead.
-        """
-        temp      = packet['value']
-        device_id = packet['device_id']
-        zone_suffix = device_id.split('_')[1] if '_' in device_id else 'A'
-        hvac_device = f'HVAC_{zone_suffix}'
+    def _hvac_device_for_zone(self, zone_id):
+        """Find the registered HVAC device in the same zone (e.g. 'HVAC_A')."""
+        for thing_name, dev in self.db._device_cache.items():
+            if dev['zone_id'] == zone_id and thing_name.startswith('HVAC'):
+                return thing_name
+        return None
 
+    def _check_temperature_and_trigger(self, packet):
+        """Decide HEATING / COOLING / IDLE from a temperature packet.
+
+        Only used as a FALLBACK: if this zone's HVAC controller has reported
+        its own state recently, the controller is the source of truth and
+        nothing is written here.
+
+        In ECS we cannot spawn subprocesses, so the decision is written to
+        hvac_state (and orchestration_events) directly. To avoid a DB write
+        for every packet, hvac_state is written only when the mode changes,
+        plus once every HVAC_HEARTBEAT_SEC so the latest row stays current.
+        """
         if not self.db:
             return
+
+        temp      = packet['value']
+        device_id = packet['device_id']
+
         zone_id = self.db._get_zone_id(device_id)
         if not zone_id:
             return
 
+        hvac_device = self._hvac_device_for_zone(zone_id)
+        if not hvac_device:
+            return                       # no HVAC registered in this zone
+
+        if device_reported_recently(zone_id):
+            return                       # the real controller owns HVAC state here
+
+        # Same clock as the temperature reading that caused the decision
+        recorded_at = datetime.fromtimestamp(packet['timestamp'], tz=timezone.utc)
+        target      = self.orch_config.temp_target
+
         if self.orch_config.is_temperature_too_low(temp):
-            print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT: {temp:.1f}C below {self.orch_config.temp_threshold_low}C → HEATING")
-            self.db.write_hvac_state_direct(
-                zone_id=zone_id, device_id=hvac_device,
-                heater_pct=80.0, cooler_pct=0.0,
-                current_temp=temp, setpoint=self.orch_config.temp_target
-            )
-            self.db.write_orchestration_event(
-                zone_id=zone_id, event_type='HVAC_HEATING',
-                description=f'Temp {temp:.1f}C below {self.orch_config.temp_threshold_low}C',
-                temperature=temp
-            )
-
+            mode, heater, cooler = 'HEATING', 80.0, 0.0
+            reason = f'Temp {temp:.1f}C below {self.orch_config.temp_threshold_low}C'
         elif self.orch_config.is_temperature_too_high(temp):
-            print(f"\n[ORCHESTRATOR] TEMPERATURE ALERT: {temp:.1f}C above {self.orch_config.temp_threshold_high}C → COOLING")
-            self.db.write_hvac_state_direct(
-                zone_id=zone_id, device_id=hvac_device,
-                heater_pct=0.0, cooler_pct=80.0,
-                current_temp=temp, setpoint=self.orch_config.temp_target
-            )
-            self.db.write_orchestration_event(
-                zone_id=zone_id, event_type='HVAC_COOLING',
-                description=f'Temp {temp:.1f}C above {self.orch_config.temp_threshold_high}C',
-                temperature=temp
-            )
+            mode, heater, cooler = 'COOLING', 0.0, 80.0
+            reason = f'Temp {temp:.1f}C above {self.orch_config.temp_threshold_high}C'
+        else:
+            mode, heater, cooler = 'IDLE', 0.0, 0.0
+            reason = f'Temp {temp:.1f}C within range'
 
-        elif self.orch_config.is_temperature_stable(temp):
-            self.db.write_hvac_state_direct(
-                zone_id=zone_id, device_id=hvac_device,
-                heater_pct=0.0, cooler_pct=0.0,
-                current_temp=temp, setpoint=self.orch_config.temp_target
+        now = time.monotonic()
+        with _last_hvac_lock:
+            last_mode, last_time = _last_hvac.get(zone_id, (None, 0.0))
+            changed   = (mode != last_mode)
+            heartbeat = (now - last_time) >= HVAC_HEARTBEAT_SEC
+            if not (changed or heartbeat):
+                return                   # same mode, written recently: skip
+            _last_hvac[zone_id] = (mode, now)
+
+        self.db.write_hvac_state_direct(
+            zone_id=zone_id, device_id=hvac_device,
+            heater_pct=heater, cooler_pct=cooler,
+            current_temp=temp, setpoint=target,
+            recorded_at=recorded_at,
+        )
+
+        if changed and mode != 'IDLE':
+            print(f"\n[ORCHESTRATOR] {reason} -> {mode}")
+            self.db.write_orchestration_event(
+                zone_id=zone_id, event_type=f'HVAC_{mode}',
+                description=reason, temperature=temp,
             )
 
 

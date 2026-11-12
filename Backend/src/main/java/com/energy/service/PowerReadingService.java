@@ -11,19 +11,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * PowerReadingService - business logic for power readings
+ */
 @Service
 @RequiredArgsConstructor
 public class PowerReadingService {
 
     private final PowerReadingRepository powerReadingRepository;
 
-    // Electricity cost per kWh — matches power_meter.c
-    // #define ELECTRICITY_COST_PER_KWH 0.12
-    private static final double COST_PER_KWH = 0.12;
+    /** Same price as the DTO, so every cost in the API agrees. */
+    private static final double COST_PER_KWH = PowerReadingResponse.COST_PER_KWH;
 
-    /**
-     * Get all power readings for a zone, newest first.
-     */
     @Transactional(readOnly = true)
     public List<PowerReadingResponse> getReadingsForZone(String zoneName) {
         return powerReadingRepository
@@ -33,9 +32,6 @@ public class PowerReadingService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get power readings for a zone within a time range.
-     */
     @Transactional(readOnly = true)
     public List<PowerReadingResponse> getReadingsForZoneBetween(
         String zoneName,
@@ -43,11 +39,8 @@ public class PowerReadingService {
         OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
-            throw new RuntimeException(
-                "Invalid time range: 'from' must be before 'to'"
-            );
+            throw new RuntimeException("Invalid time range: 'from' must be before 'to'");
         }
-
         return powerReadingRepository
             .findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(zoneName, from, to)
             .stream()
@@ -55,10 +48,6 @@ public class PowerReadingService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get the latest power reading for a zone.
-     * Used by dashboard to show current kW consumption.
-     */
     @Transactional(readOnly = true)
     public PowerReadingResponse getLatestForZone(String zoneName) {
         return powerReadingRepository
@@ -67,9 +56,6 @@ public class PowerReadingService {
             .orElse(null);
     }
 
-    /**
-     * Get last 20 readings for sparkline chart.
-     */
     @Transactional(readOnly = true)
     public List<PowerReadingResponse> getRecentReadings(String zoneName) {
         return powerReadingRepository
@@ -79,14 +65,10 @@ public class PowerReadingService {
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get readings for the last N hours.
-     */
     @Transactional(readOnly = true)
     public List<PowerReadingResponse> getReadingsForLastHours(String zoneName, int hours) {
         OffsetDateTime to = OffsetDateTime.now(java.time.ZoneOffset.UTC);
         OffsetDateTime from = to.minusHours(hours);
-
         return powerReadingRepository
             .findByZoneNameAndRecordedAtBetweenOrderByRecordedAtDesc(zoneName, from, to)
             .stream()
@@ -95,19 +77,11 @@ public class PowerReadingService {
     }
 
     /**
-     * Get energy and cost summary for a zone within a time range.
+     * Energy summary for a time range. The JSON keys are unchanged.
      *
-     * NEW CONCEPT: combining multiple repository aggregate queries
-     * and doing additional calculation in the service layer.
-     *
-     * Remember from PowerReadingRepository:
-     *   findEnergyConsumed → MAX(energy_kwh) - MIN(energy_kwh)
-     *   findCostInRange    → MAX(cost_usd)   - MIN(cost_usd)
-     *   findPeakPower      → MAX(power_kw)
-     *   findAveragePower   → AVG(power_kw)
-     *
-     * The service collects all four results and builds one
-     * clean summary Map for the dashboard energy report page.
+     * energyConsumedKwh = SUM(energy_wh) / 1000
+     * totalCostUsd      = energyConsumedKwh * price
+     * peak/avg power    = watts / 1000, reported in kW
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getEnergySummary(
@@ -116,49 +90,35 @@ public class PowerReadingService {
         OffsetDateTime to
     ) {
         if (from.isAfter(to)) {
-            throw new RuntimeException(
-                "Invalid time range: 'from' must be before 'to'"
-            );
+            throw new RuntimeException("Invalid time range: 'from' must be before 'to'");
         }
 
-        // Energy consumed in this window (kWh)
-        // MAX(energy_kwh) - MIN(energy_kwh)
-        double energyConsumed = powerReadingRepository
-            .findEnergyConsumed(zoneName, from, to)
-            .orElse(0.0);
+        double energyKwh = powerReadingRepository
+            .findTotalEnergyWh(zoneName, from, to)
+            .orElse(0.0) / 1000.0;
 
-        // Cost incurred in this window ($)
-        // MAX(cost_usd) - MIN(cost_usd)
-        double costInRange = powerReadingRepository
-            .findCostInRange(zoneName, from, to)
-            .orElse(0.0);
+        double totalCost = energyKwh * COST_PER_KWH;
 
-        // Peak instantaneous power (kW)
-        double peakPower = powerReadingRepository
-            .findPeakPower(zoneName, from, to)
-            .orElse(0.0);
+        double peakPowerKw = powerReadingRepository
+            .findPeakPowerW(zoneName, from, to)
+            .orElse(0.0) / 1000.0;
 
-        // Average instantaneous power (kW)
-        double avgPower = powerReadingRepository
-            .findAveragePower(zoneName, from, to)
-            .orElse(0.0);
+        double avgPowerKw = powerReadingRepository
+            .findAveragePowerW(zoneName, from, to)
+            .orElse(0.0) / 1000.0;
 
-        // NEW: calculate projected monthly cost from average power
-        // avgPower (kW) × 24 hours × 30 days × cost per kWh
-        // This is a service-layer calculation — not stored in DB,
-        // not done in the repository — pure business logic
-        double projectedMonthlyCost = avgPower * 24 * 30 * COST_PER_KWH;
+        // average kW x 24 h x 30 days x price
+        double projectedMonthlyCost = avgPowerKw * 24 * 30 * COST_PER_KWH;
 
         return Map.of(
             "zoneName",             zoneName,
-            "energyConsumedKwh",    energyConsumed,
-            "totalCostUsd",         costInRange,
-            "peakPowerKw",          peakPower,
-            "avgPowerKw",           avgPower,
+            "energyConsumedKwh",    energyKwh,
+            "totalCostUsd",         totalCost,
+            "peakPowerKw",          peakPowerKw,
+            "avgPowerKw",           avgPowerKw,
             "projectedMonthlyCost", projectedMonthlyCost,
             "from",                 from,
             "to",                   to
         );
     }
-
 }

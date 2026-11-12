@@ -58,7 +58,8 @@ resource "aws_iam_policy" "secrets_access" {
         ]
         Resource = [
           aws_secretsmanager_secret.db_credentials.arn,
-          aws_secretsmanager_secret.jwt_secret.arn
+          aws_secretsmanager_secret.jwt_secret.arn,
+          aws_secretsmanager_secret.ems_api_credentials.arn
         ]
       }
     ]

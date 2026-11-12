@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { usingCognito } from '../api/auth'
+import { getOnboardingStatus } from '../api/onboarding'
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -11,7 +13,17 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     const ok = await login(username, password)
-    if (ok) navigate('/')
+    if (!ok) return
+
+    // A Cognito user without an organization goes to the last sign-up stage
+    if (usingCognito) {
+      const status = await getOnboardingStatus().catch(() => null)
+      if (status && !status.hasOrganization) {
+        navigate('/signup?step=organization')
+        return
+      }
+    }
+    navigate('/')
   }
 
   return (
@@ -30,13 +42,16 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
 
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Username</label>
+              <label className="block text-xs text-gray-400 mb-1">
+                {usingCognito ? 'Email' : 'Username'}
+              </label>
               <input
-                type="text"
+                type={usingCognito ? 'email' : 'text'}
+                autoComplete={usingCognito ? 'email' : 'username'}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                placeholder="admin"
+                placeholder={usingCognito ? 'you@company.com' : 'admin'}
                 required
               />
             </div>
@@ -45,6 +60,7 @@ export default function Login() {
               <label className="block text-xs text-gray-400 mb-1">Password</label>
               <input
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -67,6 +83,12 @@ export default function Login() {
 
           </form>
         </div>
+
+        {usingCognito && (
+          <p className="text-center text-xs text-gray-500 mt-4">
+            New here? <Link to="/signup" className="text-blue-400 hover:text-blue-300">Create an account</Link>
+          </p>
+        )}
 
         <p className="text-center text-xs text-gray-600 mt-4">
           Embedded Energy Monitoring System

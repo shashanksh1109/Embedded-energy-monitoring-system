@@ -1,14 +1,26 @@
 package com.energy.model;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
+
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * One occupancy reading: how many people are in the zone.
+ *
+ * Maps to table: occupancy_readings
+ *
+ * Marked Immutable: the backend only READS readings (the gateway writes them),
+ * so Hibernate skips change-tracking for these objects.
+ */
 @Entity
 @Table(name = "occupancy_readings")
+@Immutable
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,8 +32,13 @@ public class OccupancyReading {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "device_id", nullable = false, length = 16)
-    private String deviceId;
+    @Column(name = "org_id", nullable = false)
+    private UUID orgId;
+
+    /** The device that sent this reading (device.getThingName() is e.g. "TEMP_A"). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "device_id", nullable = false)
+    private Device device;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "zone_id", nullable = false)
@@ -30,9 +47,15 @@ public class OccupancyReading {
     @Column(name = "occupancy_count", nullable = false)
     private Integer occupancyCount;
 
-    @Column(name = "distance_mm", nullable = false)
+    /** Distance from a time-of-flight sensor; NULL for other occupancy sensors. */
+    @Column(name = "distance_mm")
     private Float distanceMm;
 
+    /** When the device measured it (device clock). */
     @Column(name = "recorded_at", nullable = false)
     private OffsetDateTime recordedAt;
+
+    /** When the gateway stored it (server clock). */
+    @Column(name = "received_at", nullable = false)
+    private OffsetDateTime receivedAt;
 }

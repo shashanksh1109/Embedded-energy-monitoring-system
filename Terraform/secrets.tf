@@ -64,3 +64,32 @@ resource "aws_secretsmanager_secret_version" "jwt_secret" {
   secret_id     = aws_secretsmanager_secret.jwt_secret.id
   secret_string = random_password.jwt_secret.result
 }
+
+# --- API DATABASE ROLE (ems_api) ----------------------------------------
+# The backend connects as ems_api, which is NOT the table owner, so
+# PostgreSQL row-level security always applies to it (tenant isolation).
+# schema.sql creates the role without a password; the schema-loader Lambda
+# sets this generated one after loading the schema.
+
+resource "random_password" "ems_api_password" {
+  length  = 32
+  special = false   # letters and digits only: safe to embed in ALTER ROLE
+}
+
+resource "aws_secretsmanager_secret" "ems_api_credentials" {
+  name                    = "${var.project_name}/ems-api-credentials"
+  description             = "Credentials of the restricted ems_api database role used by the backend"
+  recovery_window_in_days = 0
+
+  tags = {
+    Name = "${var.project_name}-ems-api-credentials"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "ems_api_credentials" {
+  secret_id = aws_secretsmanager_secret.ems_api_credentials.id
+  secret_string = jsonencode({
+    username = "ems_api"
+    password = random_password.ems_api_password.result
+  })
+}

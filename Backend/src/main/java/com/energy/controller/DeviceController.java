@@ -1,18 +1,60 @@
 package com.energy.controller;
 
 import com.energy.dto.DeviceResponse;
+import com.energy.service.DeviceRegistrationService;
+import com.energy.service.DeviceRegistrationService.ClaimResult;
+import com.energy.service.DeviceRegistrationService.InvalidCodeException;
+import com.energy.service.DeviceRegistrationService.Registration;
+import com.energy.service.DeviceRegistrationService.ZoneNotFoundException;
 import com.energy.service.DeviceService;
+import com.energy.service.MembershipService;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.security.Principal;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/devices")
 @RequiredArgsConstructor
 public class DeviceController {
 
+    private static final Set<String> DEVICE_TYPES = Set.of("TEMP", "OCCUPANCY", "HVAC", "POWER", "MULTI");
+
     private final DeviceService deviceService;
+    private final DeviceRegistrationService registrationService;
+    private final MembershipService membershipService;
+
+    @Data
+    public static class RegisterRequest {
+        private UUID zoneId;
+        private String deviceType;
+        private String displayName;
+    }
+
+    @Data
+    public static class ClaimRequest {
+        private String code;
+    }
+
+    @Data
+    public static class ZoneRequest {
+        private UUID zoneId;          // null = take the device out of its zone
+    }
+
+    @Data
+    public static class ClaimByCodeRequest {
+        private String code;
+        private UUID zoneId;
+        private String displayName;
+    }
 
     @GetMapping
     public ResponseEntity<List<DeviceResponse>> getAllDevices() {
@@ -22,5 +64,111 @@ public class DeviceController {
     @GetMapping("/zone/{zone}")
     public ResponseEntity<List<DeviceResponse>> getByZone(@PathVariable String zone) {
         return ResponseEntity.ok(deviceService.getDevicesByZone(zone));
+    }
+
+    /**
+     * Add a device to one of the organization's zones (OWNER or ADMIN).
+     * Returns the device (PENDING) and a one-time claim code.
+     */
+    @PostMapping
+    public ResponseEntity<?> register(@RequestBody RegisterRequest body, Principal principal) {
+        if (!membershipService.canManage(principal)) {
+            return error(HttpStatus.FORBIDDEN, "Only an owner or admin can add devices");
+        }
+        if (body.getZoneId() == null) {
+            return error(HttpStatus.BAD_REQUEST, "zoneId is required");
+        }
+        String type = body.getDeviceType() == null ? "" : body.getDeviceType().trim().toUpperCase();
+        if (!DEVICE_TYPES.contains(type)) {
+            return error(HttpStatus.BAD_REQUEST, "deviceType must be one of " + DEVICE_TYPES);
+        }
+        String displayName = body.getDisplayName() == null ? null : body.getDisplayName().trim();
+        if (displayName != null && displayName.length() > 120) {
+            return error(HttpStatus.BAD_REQUEST, "Display name must be at most 120 characters");
+        }
+
+        try {
+            Registration r = registrationService.register(body.getZoneId(), type, displayName);
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "device", r.device(),
+                "claimCode", r.claimCode(),
+                "claimExpiresAt", r.claimExpiresAt()
+            ));
+        } catch (ZoneNotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (DataIntegrityViolationException e) {
+            return error(HttpStatus.CONFLICT, "Could not create the device, please try again");
+        }
+    }
+
+    /**
+     * Claim a device with its one-time code. PUBLIC (no login): the device
+     * itself calls this during setup. The code is the only proof needed.
+     */
+    @PostMapping("/claim")
+    public ResponseEntity<?> claim(@RequestBody ClaimRequest body) {
+        ClaimResult result = registrationService.claim(body.getCode());
+        if (result == null) {
+            return error(HttpStatus.NOT_FOUND, "Invalid, used or expired claim code");
+        }
+        return ResponseEntity.ok(Map.of(
+            "thingName", result.thingName(),
+            "deviceType", result.deviceType(),
+            "zoneName", result.zoneName()
+        ));
+    }
+
+    /**
+     * Product flow: add a factory-made device by the code on its label
+     * (OWNER or ADMIN). The device is placed in the chosen zone, ACTIVE.
+     */
+    @PostMapping("/claim-by-code")
+    public ResponseEntity<?> claimByCode(@RequestBody ClaimByCodeRequest body, Principal principal) {
+        if (!membershipService.canManage(principal)) {
+            return error(HttpStatus.FORBIDDEN, "Only an owner or admin can add devices");
+        }
+        if (body.getCode() == null || body.getCode().isBlank()) {
+            return error(HttpStatus.BAD_REQUEST, "code is required");
+        }
+        if (body.getZoneId() == null) {
+            return error(HttpStatus.BAD_REQUEST, "zoneId is required");
+        }
+        String displayName = body.getDisplayName() == null ? null : body.getDisplayName().trim();
+        if (displayName != null && displayName.length() > 120) {
+            return error(HttpStatus.BAD_REQUEST, "Display name must be at most 120 characters");
+        }
+
+        try {
+            DeviceResponse device = registrationService.claimFactoryDevice(
+                body.getCode(), body.getZoneId(), displayName);
+            return ResponseEntity.status(HttpStatus.CREATED).body(device);
+        } catch (ZoneNotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (InvalidCodeException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (DataIntegrityViolationException e) {
+            return error(HttpStatus.CONFLICT, "This device is already registered");
+        }
+    }
+
+    /** Place a device in a zone (OWNER or ADMIN), e.g. a sensor found by a hub. */
+    @PutMapping("/{deviceId}/zone")
+    public ResponseEntity<?> assignZone(@PathVariable UUID deviceId,
+                                        @RequestBody ZoneRequest body,
+                                        Principal principal) {
+        if (!membershipService.canManage(principal)) {
+            return error(HttpStatus.FORBIDDEN, "Only an owner or admin can place devices");
+        }
+        try {
+            return ResponseEntity.ok(deviceService.assignZone(deviceId, body.getZoneId()));
+        } catch (DeviceService.NotFoundException e) {
+            return error(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return error(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+    }
+
+    private static ResponseEntity<Map<String, String>> error(HttpStatus status, String message) {
+        return ResponseEntity.status(status).body(Map.of("error", message));
     }
 }

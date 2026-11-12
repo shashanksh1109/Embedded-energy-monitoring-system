@@ -40,6 +40,27 @@ typedef struct {
 
 // Function declarations
 HVACConfig parse_hvac_config(int argc, char *argv[]);
+#define RECONNECT_MAX_SEC 30   // longest wait between reconnect attempts
+
+/*
+ * Dead band (hysteresis) around the setpoint, in degrees C.
+ *
+ * Without it, the controller switched between heating and cooling every
+ * second, because the temperature was always slightly above or below the
+ * exact setpoint. Now:
+ *   - start HEATING only when temp < setpoint - HVAC_DEADBAND_C
+ *   - start COOLING only when temp > setpoint + HVAC_DEADBAND_C
+ *   - stop (go IDLE) once the temperature reaches the setpoint
+ * Inside the band, the controller rests.
+ */
+#define HVAC_DEADBAND_C 0.5f
+
+typedef enum { HVAC_IDLE, HVAC_HEATING, HVAC_COOLING } HVACMode;
+
+static const char *hvac_mode_name(HVACMode m) {
+    return m == HVAC_HEATING ? "HEAT" : (m == HVAC_COOLING ? "COOL" : "IDLE");
+}
+
 int  connect_to_gateway(void);
 void run_hvac_loop(HVACConfig *config, int sockfd);
 float simulate_temperature_physics(float current_temp, float heater_power,
@@ -98,8 +119,8 @@ int main(int argc, char *argv[]) {
     // Connect to gateway
     int sockfd = connect_to_gateway();
     if (sockfd < 0) {
-        printf("[HVAC] ✗ Failed to connect to gateway, running without telemetry\n");
-        sockfd = -1;  // Continue running even without gateway connection
+        printf("[HVAC] ✗ Gateway not reachable yet, will keep retrying\n");
+        sockfd = -1;  // The control loop keeps running and reconnects later
     }
 
     // Run control loop
@@ -186,9 +207,16 @@ int connect_to_gateway(void) {
 }
 
 void run_hvac_loop(HVACConfig *config, int sockfd) {
-    // Initialize PID controller (Ziegler-Nichols tuned gains)
-    PIDController pid;
-    pid_init(&pid, config->setpoint, 2.0, 0.5, 1.0);
+    // Two PID controllers, one per direction. pid_compute() only returns
+    // 0..100 for "how far BELOW the setpoint", so cooling uses a mirrored
+    // setpoint: error = (-setpoint) - (-temp) = temp - setpoint.
+    // Each one is reset when its mode starts, so heating's accumulated
+    // integral can never leak into cooling (and vice versa).
+    PIDController pid;          // heating
+    PIDController pid_cool;     // cooling
+    pid_init(&pid,      config->setpoint,  2.0, 0.5, 1.0);
+    pid_init(&pid_cool, -config->setpoint, 2.0, 0.5, 1.0);
+    HVACMode mode = HVAC_IDLE;
 
     // Initialize hardware if needed
     if (config->use_hardware) {
@@ -208,6 +236,7 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
     printf("[HVAC] Starting control loop...\n");
     printf("[HVAC] Setpoint: %.1f°C\n", config->setpoint);
     printf("[HVAC] PID Gains: Kp=%.1f, Ki=%.1f, Kd=%.1f\n", pid.kp, pid.ki, pid.kd);
+    printf("[HVAC] Dead band: +/-%.1f°C around the setpoint\n", HVAC_DEADBAND_C);
     printf("[HVAC] Gateway: %s:%d\n", get_gateway_host(), GATEWAY_PORT);
     printf("[HVAC] Protocol: V2 (heater%%, cooler%%, temp, setpoint)\n");
     printf("[HVAC] Press Ctrl+C to stop\n");
@@ -219,6 +248,10 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
     float cooler_power  = 0.0f;
     int   iteration     = 0;
     float dt            = 1.0f;  // 1 second time step
+
+    // Reconnect state (see the send section below)
+    time_t next_retry   = 0;     // earliest time to try connecting again
+    int    retry_delay  = 1;     // seconds; doubles after each failed attempt
 
     while (1) {
         iteration++;
@@ -233,18 +266,29 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
             current_temp = simulate_temperature_physics(current_temp, heater_power, cooler_power, dt);
         }
 
-        // Compute PID output
-        float pid_output = pid_compute(&pid, current_temp, dt);
+        // Choose the mode with hysteresis (see HVAC_DEADBAND_C)
+        if (mode != HVAC_HEATING && current_temp < config->setpoint - HVAC_DEADBAND_C) {
+            mode = HVAC_HEATING;
+            pid_reset(&pid);
+        } else if (mode != HVAC_COOLING && current_temp > config->setpoint + HVAC_DEADBAND_C) {
+            mode = HVAC_COOLING;
+            pid_reset(&pid_cool);
+        } else if (mode == HVAC_HEATING && current_temp >= config->setpoint) {
+            mode = HVAC_IDLE;                       // reached target: rest
+        } else if (mode == HVAC_COOLING && current_temp <= config->setpoint) {
+            mode = HVAC_IDLE;
+        }
 
-        // Determine heating or cooling
-        if (current_temp < config->setpoint) {
-            // Need heating
-            heater_power = pid_output;
+        // Compute the output for the active mode only
+        if (mode == HVAC_HEATING) {
+            heater_power = pid_compute(&pid, current_temp, dt);
             cooler_power = 0.0f;
-        } else {
-            // Need cooling
+        } else if (mode == HVAC_COOLING) {
             heater_power = 0.0f;
-            cooler_power = pid_output;
+            cooler_power = pid_compute(&pid_cool, -current_temp, dt);
+        } else {
+            heater_power = 0.0f;
+            cooler_power = 0.0f;
         }
 
         // Set actuators
@@ -271,6 +315,20 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
                               current_temp, config->setpoint);
         }
 
+        // (Re)connect to the gateway if we are not connected.
+        // Retries back off 1s, 2s, 4s ... up to RECONNECT_MAX_SEC, so a
+        // gateway restart no longer silences this controller forever.
+        if (sockfd < 0 && time(NULL) >= next_retry) {
+            sockfd = connect_to_gateway();
+            if (sockfd >= 0) {
+                retry_delay = 1;                       // reset after success
+            } else {
+                next_retry  = time(NULL) + retry_delay;
+                retry_delay = (retry_delay * 2 > RECONNECT_MAX_SEC)
+                              ? RECONNECT_MAX_SEC : retry_delay * 2;
+            }
+        }
+
         // Send V2 packet to gateway
         // value1=heater_pct, value2=cooler_pct, value3=current_temp, value4=setpoint
         if (sockfd >= 0) {
@@ -278,18 +336,22 @@ void run_hvac_loop(HVACConfig *config, int sockfd) {
             pack_packet_v2(&pkt, config->device_id, PACKET_TYPE_HVAC_STATE,
                            heater_power, cooler_power, current_temp, config->setpoint);
 
-            ssize_t sent = send(sockfd, &pkt, sizeof(PacketV2), 0);
-            if (sent < 0) {
+            // MSG_NOSIGNAL: if the gateway has gone away, return an error
+            // instead of raising SIGPIPE (which would kill the process).
+            ssize_t sent = send(sockfd, &pkt, sizeof(PacketV2), MSG_NOSIGNAL);
+            if (sent != (ssize_t)sizeof(PacketV2)) {
                 perror("[HVAC ERROR] send()");
-                printf("[HVAC] ✗ Gateway connection lost\n");
-                sockfd = -1;  // Stop trying to send
+                printf("[HVAC] ✗ Gateway connection lost, will reconnect\n");
+                close(sockfd);
+                sockfd     = -1;
+                next_retry = time(NULL) + retry_delay;
             }
         }
 
         // Display status
         float error = config->setpoint - current_temp;
-        printf("[HVAC] #%-4d | Temp:%6.2f°C | Error:%+6.2f°C | Heat:%5.1f%% | Cool:%5.1f%%\n",
-               iteration, current_temp, error, heater_power, cooler_power);
+        printf("[HVAC] #%-4d | %s | Temp:%6.2f°C | Error:%+6.2f°C | Heat:%5.1f%% | Cool:%5.1f%%\n",
+               iteration, hvac_mode_name(mode), current_temp, error, heater_power, cooler_power);
 
         // Stop after reaching steady state (for demo)
         /*if (iteration >= 60) {
