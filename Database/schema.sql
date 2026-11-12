@@ -88,7 +88,7 @@ CREATE TABLE devices (
     claim_code_hash   VARCHAR(128),                       -- store a HASH of the claim code, never the code
     claim_expires_at  TIMESTAMPTZ,
     claimed_at        TIMESTAMPTZ,
-    last_seen_at      TIMESTAMPTZ,                        -- updated by ingest; drives "online/offline"
+    last_seen_at      TIMESTAMPTZ,                        -- updated by ingest, drives "online/offline"
     firmware_version  VARCHAR(32),
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     UNIQUE (org_id, id),
@@ -173,7 +173,7 @@ CREATE INDEX idx_power_zone_time ON power_readings (zone_id, recorded_at DESC);
 --
 -- The API connects as role ems_api (not the table owner). For every
 -- request it first checks `memberships`, then runs:
---     SET LOCAL app.current_org = '<org uuid the user selected>';
+--     SET LOCAL app.current_org = '<org uuid the user selected>'
 -- Every policy below compares org_id with that setting.
 --
 -- current_setting(..., true) returns NULL when the setting is missing,
