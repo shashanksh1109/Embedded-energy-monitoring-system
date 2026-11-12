@@ -2,611 +2,182 @@
 
 ![banner](https://raw.githubusercontent.com/shashanksh1109/shashanksh1109/main/banner.svg)
 
-# 🏢 Distributed Smart Building Energy Management System
+# Smart Building Energy Monitoring - Multi-Tenant IoT Platform
 
-**A full-stack IoT platform built from bare-metal C firmware to AWS cloud infrastructure.**
+**From C firmware and a Raspberry Pi hub to a multi-tenant cloud service on AWS.**
 
-*Custom binary protocol · FreeRTOS-style concurrency · PostgreSQL time-series · Spring Boot API · React dashboard · Terraform IaC · GitHub Actions CI/CD*
-
-[![Language](https://img.shields.io/badge/Language-C%20%7C%20Python%20%7C%20Java%20%7C%20React-blue)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
-[![Cloud](https://img.shields.io/badge/Cloud-AWS%20ECS%20Fargate-orange)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
-[![IaC](https://img.shields.io/badge/IaC-Terraform-purple)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-green)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
-[![Status](https://img.shields.io/badge/Status-Live%20on%20AWS-success)](https://github.com/shashanksh1109/embedded-energy-monitoring-system)
+*Custom binary protocol | Raspberry Pi hub | PostgreSQL row-level security | Spring Boot | React | Amazon Cognito | Terraform | ECS Fargate*
 
 </div>
 
 ---
 
-## 🧠 What Makes This Different
+## What it does
 
-Most engineers build either embedded systems *or* cloud applications. This project covers the full stack — from a **custom 18-byte binary protocol in C** running on embedded sensor nodes, all the way to a **Terraform-provisioned AWS stack** with ECS Fargate, RDS PostgreSQL, and a live React dashboard.
+A customer can, entirely from the browser:
 
-Every layer was designed, debugged, and deployed independently:
+1. **Sign up** with their email (verified by a code) and create their **organization**.
+2. Add **zones** (rooms) to their building.
+3. Plug in a **Raspberry Pi hub**: its OLED shows a pairing code; entering the code on the website adds the hub to *their* organization.
+4. Describe the **hardware wiring** on a web page (which LED, fan or sensor is on which GPIO pin). The hub downloads it and applies it - no code changes.
+5. Watch **live sensor data** per zone, and switch **outputs** (fan, LEDs, relays) with ON/OFF buttons that show the state **confirmed by the hub**.
 
-| Layer | Decision | Why |
-|:---|:---|:---|
-| Binary over JSON | 20-byte packet vs ~80-byte JSON | 75% bandwidth reduction, O(1) parsing, no heap allocation |
-| TCP + MQTT + UART | Three transports simultaneously | Different sensor classes need different transport guarantees |
-| PID HVAC control | Ziegler-Nichols tuned, anti-windup | Deterministic thermal regulation matching real building controllers |
-| ECS Fargate over EC2 | Serverless containers | No AMI management, per-task IAM, auto-restart on failure |
-| Terraform IaC | Full AWS stack version-controlled | Reproducible, destroyable, zero manual console clicks |
+Every organization's data is isolated **inside PostgreSQL** with row-level security.
 
 ---
 
-## 🏗️ System Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          PHYSICAL / SIMULATED SENSORS                   │
-│                                                                         │
-│   ┌─────────────────────┐        ┌─────────────────────┐                │
-│   │   SIMULATION MODE   │   OR   │   HARDWARE MODE     │                │
-│   │   (default/CI/CD)   │        │   (--hardware flag) │                │
-│   │                     │        │                     │                │
-│   │  sine wave + noise  │        │  DHT22  (temp)      │                │
-│   │  schedule model     │        │  VL53L1X (occupancy)│                │
-│   │  PID-correlated     │        │  INA219  (power)    │                │
-│   └──────────┬──────────┘        └──────────┬──────────┘                │
-│              └─────────────┬────────────────┘                           │
-│                            │ SensorHAL_t interface                      │
-│                            │ (identical call in either mode)            │
-└────────────────────────────┼────────────────────────────────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │ POSIX IPC    │              │
-              │ Shared Mem   │              │
-              ▼              ▼              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      EMBEDDED LAYER (C11)                               │
-│                                                                         │
-│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                    │
-│  │  Zone A     │   │  Zone B     │   │  Zone C     │                    │
-│  │ temp_sensor │   │ temp_sensor │   │ temp_sensor │                    │
-│  │ + occupancy │   │ + occupancy │   │ + occupancy │                    │
-│  │ + power     │   │ + power     │   │ + power     │                    │
-│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                    │
-│         │                 │                  │                          │
-│         └─────── PID HVAC Controller ────────┘                          │
-│                  (Ziegler-Nichols tuned, anti-windup)                   │
-└───────────┬─────────────────────────────────────────────────────────────┘
-            │
-            │  Three parallel transports simultaneously
-            ├─── TCP sockets  (primary — binary V1/V2 packets)
-            ├─── MQTT         (Mosquitto pub/sub)
-            └─── UART         (named pipes → RS-485 on real hardware)
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      GATEWAY LAYER (Python)                             │
-│                                                                         │
-│  Multi-Threaded TCP Server                                              │
-│  ├── Binary Parser (V1/V2 auto-detection + checksum validation)         │
-│  ├── Analytics Engine (mean/stddev/min/max per zone every 60s)          │
-│  ├── HVAC Orchestrator (threshold-based, writes directly to DB)         │
-│  ├── MQTT Subscriber                                                    │
-│  └── UART Reader                                                        │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │ psycopg2
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      DATABASE LAYER (PostgreSQL)                        │
-│                                                                         │
-│  10 tables: zones · devices · temperature_readings                      │
-│  occupancy_readings · hvac_state · power_readings                       │
-│  analytics_snapshots · orchestration_events · schedules                 │
-│  ml_predictions  —  UUID PKs · TIMESTAMPTZ · 90-day retention           │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │ JPA/Hibernate
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      BACKEND LAYER (Java Spring Boot)                   │
-│                                                                         │
-│  7 REST controllers · JWT authentication (HS512)                        │
-│  WebSocket live data push · Swagger/OpenAPI docs · Port 8081            │
-└───────────────────────────┬─────────────────────────────────────────────┘
-                            │ Axios HTTP + STOMP WebSocket
-                            ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      FRONTEND LAYER (React + Vite)                      │
-│                                                                         │
-│  Dashboard · Zone Overview · Charts · Analytics · Schedules             │
-│  Real-time updates every 5s · Recharts · Tailwind dark theme            │
-└─────────────────────────────────────────────────────────────────────────┘
+                         Browser (any customer, anywhere)
+                                      |
+                 S3 static site (React) + Amazon Cognito (sign-up / login)
+                                      |  HTTPS to Cognito, HTTP to the API
+                                      v
+   +------------------- AWS VPC (Terraform) -------------------------------+
+   |                                                                       |
+   |   ALB --> Spring Boot API (ECS Fargate)                               |
+   |             - verifies Cognito JWTs (RS256, JWKS)                     |
+   |             - org from memberships -> set_config('app.current_org')  |
+   |             - connects as role ems_api (row-level security applies)   |
+   |                              |                                        |
+   |                              v                                        |
+   |                     PostgreSQL 15 (RDS)  <-- schema loaded by Lambda  |
+   |                              ^                                        |
+   |   NLB --> Python gateway (ECS Fargate)                                |
+   |             - 20/32-byte binary packets, checksum, device registry    |
+   |             - writes readings per organization, per-zone analytics    |
+   +-------------------------------^--------------------------------------+
+                                   |  TCP readings          ^ HTTP polling
+                                   |                        | (pair, config, commands)
+                     Raspberry Pi hub (Python, systemd)  ---+
+                       - OLED pairing code, GPIO outputs, sensor drivers
+                       - simulated C devices also run on ECS for demo data
 ```
 
 ---
 
-## ☁️ AWS Cloud Architecture
+## Key engineering decisions
+
+| Area | Decision | Why |
+|---|---|---|
+| Tenant isolation | PostgreSQL **row-level security** on every tenant table; the API connects as a non-owner role and sets `app.current_org` on every pooled connection | Isolation is enforced by the database, even if a query forgets a filter. Missing org = sees nothing (fail closed). Proven with a second tenant holding a same-named zone and a newer reading |
+| Cross-tenant links | **Composite foreign keys** `(org_id, id)` | A zone can never point at another organization's building, a reading at another organization's device |
+| Accounts | **Amazon Cognito**; backend verifies RS256 access tokens (issuer, expiry, `token_use`, `client_id`) | No passwords stored by the app; 60-minute tokens with silent refresh |
+| Onboarding | Sign-up -> email code -> create organization (one transaction, advisory lock against double-submits) | Self-service, no manual database work |
+| Hub pairing | **Code shown on the device**, typed in the dashboard ("device code" flow); hub keeps a 32-byte secret key; only SHA-256 hashes stored | Works for headless devices; the code expires in 10 minutes |
+| Remote control | Hub **polls** for commands every 2 s; commands expire after 30 s; dashboard shows the **confirmed** state | Home routers block inbound connections; no stale command ever fires late |
+| Hardware config | Versioned JSON config edited on the web, **validated server-side** (free GPIO pins only, no pin/I2C address reused) | Rewiring needs no code changes; a bad config can never reach a hub |
+| Pin safety | Hub releases pins a new config no longer uses, and all unused pins on start | An output moved or removed can never stay stuck ON |
+| Device protocol | Fixed 20-byte (V1) / 32-byte (V2) little-endian packets with checksum | Compact, simple to parse on constrained devices |
+| HVAC control | PID per direction + **dead band with hysteresis**; local control keeps running when the network is down | Mode switches cut from ~556 to ~22 per 10 minutes in simulation |
+| Reliability | Exponential-backoff reconnect (C controller, hub), `systemd` restart, idempotent inserts (`ON CONFLICT DO NOTHING`) | Devices recover on their own; resent readings are stored once |
+| Infrastructure | Terraform: VPC, ALB, NLB, ECS Fargate, RDS, Cognito, Secrets Manager, Lambda schema loader | Reproducible from an empty AWS account |
+
+---
+
+## Repository layout
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                        GITHUB                           │
-│  git push → GitHub Actions CI/CD Pipeline               │
-│    ├── Build + test backend (Maven/JUnit)               │
-│    ├── Build + test frontend (Vite/Vitest)              │
-│    ├── Build + test gateway (pytest)                    │
-│    ├── Push Docker images → ECR                         │
-│    ├── Deploy ECS services (force-new-deployment)       │
-│    └── Build React → sync to S3                         │
-└─────────────────┬───────────────────────────────────────┘
-                  ▼
-┌─────────────────────────────────────────────────────────┐
-│              AWS (Terraform managed)                    │
-│                                                         │
-│  VPC                                                    │
-│  ├── Public Subnet                                      │
-│  │     └── ALB → /api/* → ECS backend                   │
-│  │                                                      │
-│  ├── Private Subnet                                     │
-│  │     ├── ECS Fargate Cluster                          │
-│  │     │     ├── energy-management-backend  (Spring)    │
-│  │     │     ├── energy-management-gateway  (Python)    │
-│  │     │     ├── energy-management-sensor   (C binary)  │
-│  │     │     └── energy-management-power    (C binary)  │
-│  │     │                                                │
-│  │     └── RDS PostgreSQL (db.t3.micro)                 │
-│  │                                                      │
-│  └── S3                                                 │
-│        └── React frontend (static website hosting)      │
-│                                                         │
-│  ECR — 5 Docker image repositories                      │
-│  CloudWatch — structured logs for all 5 services        │
-│  Secrets Manager — DB credentials + JWT secret          │
-│  Service Discovery — gateway.energy.local DNS           │
-│  IAM — least-privilege task roles                       │
-└─────────────────────────────────────────────────────────┘
+Embedded/     C programs: temperature sensor, HVAC controller (PID, dead band, reconnect), power meter
+Gateway/      Python TCP gateway: binary protocol, device registry, analytics, HVAC fallback logic (+ pytest)
+Backend/      Spring Boot API: Cognito JWT, tenant context, RLS-backed repositories, hubs, devices, onboarding
+Frontend/     React + Vite dashboard: sign-up, zones, devices, hubs (buttons, hardware setup editor)
+Hub/          Raspberry Pi hub agent (ems_hub.py) and its systemd service
+Database/     schema.sql (tables, RLS policies, roles, demo seed); dev-only helper scripts
+Terraform/    AWS infrastructure (VPC, ECS, RDS, ALB/NLB, Cognito, secrets, schema-loader Lambda)
+tools/        factory_provision.py - creates factory devices with label codes
+scripts/      aws-up.sh / aws-down.sh
 ```
 
 ---
 
-## 🛠️ Technology Stack
+## Data model (PostgreSQL)
 
-### Embedded Layer (C)
-- Language: C11 standard
-- Networking: POSIX sockets (TCP/IP)
-- Protocols: Custom binary V1 (20-byte) and V2 (32-byte) packets
-- IPC: POSIX shared memory + named semaphores
-- Hardware-ready: DHT22 temperature, VL53L1X occupancy, INA219 power
-- Transports: TCP, MQTT (Mosquitto), UART (named pipes simulation)
+- **Tenancy:** `organizations`, `app_users` (Cognito `sub`), `memberships` (OWNER / ADMIN / VIEWER)
+- **Places:** `buildings`, `zones`
+- **Devices:** `devices` (PENDING / ACTIVE / DISABLED, `last_seen_at`), `device_claims`, `factory_devices`
+- **Hubs:** `hubs`, `hub_sensors`, `hub_commands`, `hub_outputs`, `hub_configs` (versioned JSON + I2C scan)
+- **Time series:** `temperature_readings`, `occupancy_readings`, `power_readings` (watts + per-interval energy), `hvac_state`, `analytics_snapshots`, `orchestration_events`
 
-### Gateway Layer (Python)
-- Multi-threaded TCP server
-- Binary packet parser (V1/V2 auto-detection)
-- PostgreSQL writer (psycopg2)
-- MQTT subscriber (paho-mqtt)
-- Analytics engine (60-second statistical snapshots)
-- HVAC orchestration (direct DB writes on AWS)
-
-### Database (PostgreSQL)
-- 10-table normalized schema · UUID primary keys
-- TIMESTAMPTZ for all timestamps · 90-day automatic data retention
-
-### Backend (Java Spring Boot)
-- Spring Boot 3.x, Java 17 · JPA/Hibernate ORM
-- JWT authentication (HS512) · WebSocket for live data push
-- Swagger/OpenAPI documentation
-- 7 REST controllers, 7 services, 7 repositories
-
-### Frontend (React + Vite)
-- React 18, Vite build tool · Tailwind CSS dark theme
-- Axios for REST API · Recharts for data visualization
-- STOMP/SockJS for WebSocket
-
-### Infrastructure (AWS + Terraform)
-- ECS Fargate (5 services) · RDS PostgreSQL (db.t3.micro)
-- ALB · ECR (5 image repositories) · S3 (frontend static hosting)
-- CloudWatch Logs · Secrets Manager · Route 53 Service Discovery
-- GitHub Actions CI/CD
+Tenant tables carry `org_id` and a `tenant_isolation` policy. Tables a device must reach **before** its organization is known (`hubs`, `device_claims`, ...) have no RLS; every user-facing query on them filters by organization in code.
 
 ---
 
-## 📁 Project Structure
+## Run it locally
 
-```
-Energy Management System/
-│
-├── 📁 Embedded/                    # C Programs (Sensor Layer)
-│   ├── main.c                      # Temperature sensor entry point
-│   ├── sensor_logic.c              # Sensor orchestration
-│   ├── hvac_controller.c           # PID-based HVAC control
-│   ├── power_meter.c               # Power consumption monitoring
-│   ├── protocol.c / protocol.h     # Binary packet V1 + V2
-│   ├── network.c / network.h       # TCP socket operations
-│   ├── pid.c / pid.h               # PID controller
-│   ├── ipc.c / ipc.h               # POSIX shared memory IPC
-│   ├── mqtt_client.c / .h          # MQTT publish
-│   ├── uart_sim.c / .h             # UART simulation (named pipes)
-│   └── Dockerfile                  # Multi-stage GCC build
-│
-├── 📁 Gateway/                     # Python Programs (Aggregation)
-│   ├── gateway_server.py           # Orchestration
-│   ├── network.py                  # TCP server + client handler
-│   ├── protocol.py                 # Binary parser V1/V2
-│   ├── db_writer.py                # PostgreSQL writer
-│   ├── analytics.py                # Statistical engine
-│   ├── mqtt_subscriber.py          # MQTT subscriber
-│   └── Dockerfile
-│
-├── 📁 Backend/                     # Java Spring Boot REST API
-│   └── src/main/java/com/energy/
-│       ├── controller/             # 7 REST controllers
-│       ├── service/                # 7 business logic services
-│       ├── repository/             # 7 JPA repositories
-│       ├── model/                  # 7 JPA entity models
-│       ├── security/               # JWT auth (JwtUtil, JwtFilter)
-│       └── config/                 # CORS, Swagger, WebSocket config
-│
-├── 📁 Frontend/                    # React + Vite Dashboard
-│   └── src/
-│       ├── pages/                  # Dashboard, ZoneOverview, Charts,
-│       │                           # Analytics, Schedules, Login
-│       ├── components/             # Layout, Sidebar, StatCard
-│       └── api/                    # axios, auth, temperature, power
-│
-├── 📁 Database/
-│   └── schema.sql                  # 10-table PostgreSQL schema
-│
-├── 📁 Terraform/                   # AWS Infrastructure as Code
-│   ├── vpc.tf                      # VPC, subnets, IGW, NAT
-│   ├── ecs.tf                      # ECS cluster, services, task defs
-│   ├── rds.tf                      # PostgreSQL RDS instance
-│   ├── alb.tf                      # Application Load Balancer
-│   ├── ecr.tf                      # ECR repositories
-│   ├── s3.tf                       # Frontend + snapshots buckets
-│   ├── iam.tf                      # Task roles and policies
-│   ├── secrets.tf                  # Secrets Manager
-│   └── service_discovery.tf        # Route 53 private DNS
-│
-├── 📁 .github/workflows/
-│   └── deploy.yml                  # GitHub Actions CI/CD pipeline
-│
-├── docker-compose.yml              # Local 7-container stack
-├── start_system.sh                 # Local startup script
-└── README.md
-```
+Prerequisites: Docker Desktop, Java 17+, Maven, Node 20+.
 
----
-
-## 📦 Binary Packet Format
-
-### V1 Packet (20 bytes) — Temperature, Occupancy, Power
-```
-Byte:  0-7        8-11        12-15      16      17        18-19
-       ┌──────────┬───────────┬──────────┬───────┬─────────┬─────────┐
-       │device_id │ timestamp │  value   │ type  │checksum │ padding │
-       │ 8 bytes  │ uint32    │  float   │ uint8 │  uint8  │ 2 bytes │
-       └──────────┴───────────┴──────────┴───────┴─────────┴─────────┘
-Checksum = sum(bytes[0:17]) % 256
-```
-
-### V2 Packet (32 bytes) — HVAC State
-```
-Byte:  0-7        8-11        12      13        14-15      16-19   20-23   24-27   28-31
-       ┌──────────┬───────────┬───────┬─────────┬──────────┬───────┬───────┬───────┬───────┐
-       │device_id │ timestamp │ type  │version=2│ padding  │value1 │value2 │value3 │value4 │
-       │ 8 bytes  │ uint32    │ uint8 │  uint8  │ 2 bytes  │ float │ float │ float │ float │
-       └──────────┴───────────┴───────┴─────────┴──────────┴───────┴───────┴───────┴───────┘
-V2 HVAC fields: value1=heater_pct, value2=cooler_pct, value3=current_temp, value4=setpoint
-```
-
----
-
-## 🚀 Quick Start — Local
-
-### Prerequisites
 ```bash
-gcc --version      # GCC 7.0+
-python3 --version  # Python 3.7+
-java --version     # Java 17+
-node --version     # Node 20+
-docker --version   # Docker 20+
-```
+# Database, gateway, simulated devices, backend
+docker compose up --build -d
 
-### Run with Docker Compose
-```bash
-docker compose up --build
-```
-
-Open `http://localhost:5173`
-
-### Run manually
-```bash
-cd Gateway && python3 main.py &
-cd Embedded && make all && ./temp_sensor TEMP_A Zone_A 22.0 5 &
-cd Backend && mvn clean package -DskipTests && java -jar target/*.jar &
+# Frontend (http://localhost:5173)
 cd Frontend && npm install && npm run dev
 ```
 
----
-
-## ☁️ Deploy to AWS
-
-### Prerequisites
-```bash
-aws configure          # Set AWS credentials
-terraform --version    # Terraform 1.0+
-```
-
-### Deploy
-```bash
-cd Terraform
-terraform init
-terraform apply -auto-approve
-```
-
-### Destroy
-```bash
-terraform destroy -auto-approve
-```
-
-> ⚠️ Running cost: ~$0.04/hour (~$1/day). Destroy when not demoing.
-
----
-
-## 🔄 CI/CD Pipeline
-
-Every push to `main` triggers:
-
-```
-Push to main
-    │
-    ├── test-backend    → mvn test
-    ├── test-frontend   → npm test (Vitest)
-    └── test-gateway    → pytest
-          │
-          ├── deploy-backend   → build JAR → Docker → ECR → ECS update
-          ├── deploy-frontend  → npm build → S3 sync
-          ├── deploy-gateway   → Docker → ECR → ECS update
-          └── deploy-embedded  → Docker → ECR → ECS update
-```
-
-### Required GitHub Secrets
-| Secret | Description |
-|---|---|
-| `AWS_ACCESS_KEY_ID` | IAM user access key |
-| `AWS_SECRET_ACCESS_KEY` | IAM user secret key |
-
----
-
-## 📡 API Reference
-
-All endpoints require `Authorization: Bearer <token>` header.
-
-### Authentication
-```
-POST /api/auth/login
-Body: {"username": "admin", "password": "your_password"}
-Returns: {"token": "eyJ...", "expiresIn": 86400000}
-```
-
-### Temperature
-```
-GET /api/temperature/{zone}/latest
-GET /api/temperature/{zone}/recent?hours=1
-GET /api/temperature/{zone}/history?hours=24
-```
-
-### Power
-```
-GET /api/power/{zone}/latest
-GET /api/power/{zone}/recent?hours=1
-GET /api/power/{zone}/sparkline
-```
-
-### HVAC
-```
-GET /api/hvac/{zone}/latest
-GET /api/hvac/{zone}/recent?hours=1
-GET /api/hvac/{zone}/mode
-```
-
-### Zones & Analytics
-```
-GET /api/zones
-GET /api/zones/{id}
-GET /api/analytics/{zone}/latest?metricType=TEMP
-```
-
----
-
-## 🐛 Key Engineering Challenges
-
-A full record of 25 technical issues encountered is documented in `docs/issues-report.md`. Key highlights:
-
-| Issue | Root Cause | Resolution |
-|---|---|---|
-| Spring Boot 403 persistent | Docker cached old JAR silently | Build JAR locally, copy into image |
-| Sensor DNS failure on AWS | Route53 zone associated with wrong VPC | `aws route53 associate-vpc-with-hosted-zone` |
-| Power checksum failures | Float byte `0x02` falsely detected as V2 packet | Validate type byte alongside version byte |
-| HVAC subprocess fails in ECS | Fargate containers are isolated — no subprocess spawning | Write HVAC state directly to DB |
-| Backend health check timeout | Spring Boot needs 48s to start, startPeriod was 60s | Increased startPeriod to 120s |
-| Login error on S3 frontend | VITE_API_URL missing `/api` suffix | Set correct URL with `/api` at build time |
-
----
-
-## 📊 Performance Metrics
-
-| Metric | Value |
-|---|---|
-| Packet size (V1) | 20 bytes |
-| Packet size (V2) | 32 bytes |
-| Analytics interval | 60 seconds |
-| Dashboard refresh | 5 seconds |
-| JWT expiry | 24 hours |
-| Max concurrent sensors | 100+ (thread-per-client) |
-| CI/CD ops effort reduction | 90% vs manual deployment |
-
----
-
-## 🎓 Skills Demonstrated
-
-**Embedded Systems:** C programming, POSIX sockets, binary protocol design, PID control, IPC shared memory, DHT22/VL53L1X/INA219 hardware interfaces
-
-**Networking:** TCP/IP socket programming, MQTT pub/sub, UART framing, binary packet parsing, checksum validation
-
-**Backend:** Spring Boot, JPA/Hibernate, JWT security, REST API design, WebSocket, Swagger/OpenAPI
-
-**Frontend:** React, Vite, Tailwind CSS, Recharts, real-time data polling, protected routes
-
-**Cloud & DevOps:** AWS ECS Fargate, RDS, ALB, ECR, S3, Secrets Manager, Service Discovery, CloudWatch, IAM, Terraform IaC, GitHub Actions CI/CD
-
-**Database:** PostgreSQL schema design, UUID PKs, TIMESTAMPTZ, JPA repositories, JPQL queries
-
----
-
-## 👤 Author
-
-**Shashank Sakrappa Hakari**
-
-M.S. Software Engineering Systems — Northeastern University (GPA: 3.89)
-
-📧 sh.s@northeastern.edu &nbsp;·&nbsp;
-💼 [LinkedIn](https://www.linkedin.com/in/shashank-s-h-651970349/) &nbsp;·&nbsp;
-🌐 [Portfolio](https://shashanksh1109.github.io) &nbsp;·&nbsp;
-🐙 [GitHub](https://github.com/shashanksh1109)
-
----
-
-`embedded-systems` `iot` `aws` `ecs-fargate` `terraform` `github-actions` `spring-boot` `react` `postgresql` `docker` `c-programming` `python` `tcp-sockets` `binary-protocol` `pid-controller` `real-time-systems` `energy-monitoring` `smart-building`
-
----
-
-## 🔌 Hardware Simulation Layer
-
-One of the core architectural decisions in the embedded layer is a **hardware abstraction design that allows the same firmware binary to run in three modes** — pure simulation, mixed simulation/hardware, or full hardware — without recompilation.
-
-### Why This Matters
-
-In production embedded development, firmware must be testable before hardware arrives, validable on a CI server with no physical devices, and portable across hardware revisions. This project implements exactly that pattern.
-
-### Three Operating Modes
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    FIRMWARE RUNTIME MODES                       │
-│                                                                 │
-│  Mode 1: Full Simulation (default)                              │
-│  ─────────────────────────────────                              │
-│  Sensor reads → Mathematical model                              │
-│  (sine wave + noise + drift)                                    │
-│  No hardware required · Runs in Docker · CI/CD compatible       │
-│                                                                 │
-│  Mode 2: Hardware Mode (--hardware flag)                        │
-│  ──────────────────────────────────────                         │
-│  Sensor reads → Real DHT22 / VL53L1X / INA219                   │
-│  Same binary, same protocol, same gateway                       │
-│  Just plug in sensors and pass the flag                         │
-│                                                                 │
-│  Mode 3: Mixed (per-sensor override)                            │
-│  ───────────────────────────────────                            │
-│  Zone A → real DHT22                                            │
-│  Zone B → simulated                                             │
-│  Zone C → simulated                                             │
-│  Useful for partial hardware bring-up                           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Hardware Abstraction Layer (HAL) Design
-
-```c
-/* hal.h — the interface every sensor implements */
-typedef struct {
-    int   (*init)(const char *config);
-    float (*read_temperature)(void);
-    float (*read_occupancy)(void);
-    float (*read_power)(void);
-    void  (*deinit)(void);
-} SensorHAL_t;
-
-/* Two implementations — same interface */
-extern SensorHAL_t sim_hal;       /* simulation/default  */
-extern SensorHAL_t hardware_hal;  /* real GPIO/I2C/SPI   */
-
-/* Runtime selection via --hardware flag */
-SensorHAL_t *hal = use_hardware ? &hardware_hal : &sim_hal;
-float temp = hal->read_temperature();  /* identical call either way */
-```
-
-### Simulated Sensor Models
-
-Each simulated sensor uses a **physics-inspired mathematical model** rather than random noise — making the simulation data realistic enough to test control algorithms:
-
-| Sensor | Simulation Model | Parameters |
-|:---|:---|:---|
-| **Temperature (DHT22)** | Sine wave + Gaussian noise + slow drift | Base temp, amplitude, period, noise σ |
-| **Occupancy (VL53L1X)** | Step function with schedule-based transitions | Business hours pattern, random arrivals |
-| **Power (INA219)** | Correlated with HVAC state + base load + noise | HVAC watts, idle watts, noise factor |
-| **HVAC State** | PID output clamped to [0%, 100%] | Kp, Ki, Kd, setpoint, anti-windup limit |
-
-### Simulation Code Example
-
-```c
-/* sim_hal.c — temperature simulation */
-float sim_read_temperature(void) {
-    static float drift = 0.0f;
-    time_t now = time(NULL);
-
-    /* Sine wave: 24-hour cycle, ±3°C amplitude */
-    float cycle = sinf(2.0f * M_PI * (now % 86400) / 86400.0f);
-    float base  = config.base_temp + cycle * 3.0f;
-
-    /* Gaussian noise: σ = 0.15°C (DHT22 spec) */
-    float noise = gaussian_noise(0.0f, 0.15f);
-
-    /* Slow drift: ±0.5°C over hours */
-    drift += (rand_float() - 0.5f) * 0.001f;
-    drift  = clamp(drift, -0.5f, 0.5f);
-
-    return base + noise + drift;
-}
-```
-
-### Transport Simulation
-
-The embedded layer also simulates **three communication transports in parallel**, each mapped to a real hardware interface:
-
-| Simulated Transport | Real Hardware Equivalent | Implementation |
-|:---|:---|:---|
-| TCP sockets | Ethernet / Wi-Fi (ESP32) | POSIX `socket()` / `connect()` |
-| MQTT (Mosquitto) | MQTT over TLS on IoT broker | `paho-mqtt` C client |
-| UART named pipes | RS-485 / serial bus | Linux named pipes (`mkfifo`) |
-
-This means the gateway is tested against **all three transport paths simultaneously** in CI — the same paths it would use with real hardware.
-
-### IPC Between Sensor Processes
-
-On multi-core hardware, separate processes handle different sensor types. They share state via **POSIX shared memory + named semaphores** — the same IPC mechanism used in production RTOS environments:
-
-```c
-/* ipc.h — shared state between HVAC and power meter processes */
-typedef struct {
-    float    current_temp;      /* written by temperature sensor  */
-    float    setpoint;          /* written by HVAC controller     */
-    float    heater_pct;        /* written by HVAC → read by power*/
-    float    cooler_pct;        /* written by HVAC → read by power*/
-    uint32_t last_update_ms;
-} SharedState_t;
-
-/* Access pattern */
-sem_wait(shm_sem);              /* acquire lock                   */
-state->heater_pct = pid_out;    /* atomic write                   */
-sem_post(shm_sem);              /* release lock                   */
-```
-
-### Hardware Bring-Up Path
-
-When real hardware is available, switching is a single flag:
+- Without Cognito settings, the login page uses the built-in demo login (`admin` / `energy123`, Demo Organization).
+- With Cognito: put `COGNITO_ISSUER` and `COGNITO_CLIENT_ID` in `.env` (repo root) and `VITE_COGNITO_CLIENT_ID` / `VITE_COGNITO_REGION` in `Frontend/.env.local`.
+- `Database/dev_roles.sql` gives the `ems_api` role a local-only password; `Database/dev_second_org.sql` adds a second tenant for isolation tests.
+
+Tests:
 
 ```bash
-# Simulation mode (default — no hardware needed)
-./temp_sensor TEMP_A Zone_A 22.0 5
-
-# Hardware mode — reads real DHT22 on GPIO4
-./temp_sensor TEMP_A Zone_A 22.0 5 --hardware
-
-# Docker: same image, same binary, hardware passed through
-docker run --device /dev/i2c-1 ems-sensor --hardware
+cd Gateway && python -m pytest tests -v     # protocol, multi-tenant writes, framing, HVAC ownership
+cd Backend && mvn test
 ```
 
-The gateway, database, backend, and frontend layers are **completely unaware** of which mode the sensor is running in — the binary protocol is identical regardless.
+---
+
+## Deploy to AWS
+
+```bash
+cd Terraform && terraform init && cd ..
+./scripts/aws-up.sh      # infrastructure, images, frontend build (with Cognito client ID), ECS rollout
+./scripts/aws-down.sh    # tear everything down (the stack costs a few dollars per day while running)
+```
+
+The schema-loader Lambda loads `Database/schema.sql` into a fresh RDS instance and sets the `ems_api` password from Secrets Manager. Check it with `terraform output schema_load_result`.
+
+---
+
+## Set up a Raspberry Pi hub
+
+1. Copy `Hub/ems_hub.py` to `~/ems-hub/` on the Pi (Python venv with `luma.oled` and `smbus2` for the OLED and I2C scan).
+2. Create `/etc/ems-hub.conf`:
+   ```
+   API_URL=http://<ALB address>
+   GATEWAY_HOST=<NLB address>
+   GATEWAY_PORT=8080
+   ```
+3. Install `Hub/ems-hub.service` into `/etc/systemd/system/` and run `sudo systemctl enable --now ems-hub`.
+4. The OLED shows a pairing code: **Hubs -> + Add hub** on the website.
+5. **Hardware setup**: add outputs and sensors with their pins; the hub applies them within ~15 s.
+
+Supported on the hub today: Pi CPU temperature, PIR motion sensor, GPIO outputs (LED / fan via transistor / relay). BME280 and INA219 configurations are accepted and validated, with drivers still to come.
+
+---
+
+## Known limitations
+
+- The site and API use **HTTP**; HTTPS (CloudFront + ACM + a domain) is planned.
+- Devices on the raw TCP gateway are identified by thing name only; the planned fix is **MQTT over TLS with per-device certificates** (AWS IoT Core).
+- One building per organization in the UI; no "invite member" yet (memberships already support several users and roles).
+- Commands reach hubs by polling (~2 s latency), not push.
+- A single NAT gateway (one availability zone) for private-subnet egress.
+
+## Roadmap
+
+- HTTPS with a custom domain
+- Invite members and role management in the UI
+- BME280 / INA219 drivers on the hub; one-line hub installer
+- MQTT over TLS (AWS IoT Core) for device connectivity
+- Flyway migrations for the backend schema
+
+---
+
+## Author
+
+**Shashank Sakrappa Hakari** - M.S. Software Engineering Systems, Northeastern University
+
+[LinkedIn](https://www.linkedin.com/in/shashanksh232/) | [GitHub](https://github.com/shashanksh1109)
